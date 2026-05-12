@@ -1,0 +1,25 @@
+# configs/training.yaml — Shared training hyperparameters
+# Referenced by train.py for settings not in model_*.yaml
+specaugment:
+  freq_mask_param:  27    # F in SpecAugment paper
+  time_mask_param:  100   # T in SpecAugment paper
+  num_freq_masks:   2
+  num_time_masks:   2
+
+augmentation:
+  speed_rates:      [0.9, 1.1]
+  noise_snr_db:     [10, 20]
+
+dataloader:
+  num_workers:      4
+  pin_memory:       true
+  prefetch_factor:  2
+
+checkpoint:
+  save_every_n_epochs: 5
+  keep_top_k:          3       # Keep only 3 best checkpoints
+  early_stopping_patience: 15
+
+logging:
+  log_every_n_steps: 50
+  wandb_watch_model: false    # Expensive; enable only for debugging

@@ -1,0 +1,26 @@
+FROM pytorch/pytorch:2.8.0-cuda12.4-cudnn9-runtime
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        libsndfile1 ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt requirements-api.txt ./
+RUN pip install --no-cache-dir -r requirements.txt -r requirements-api.txt
+
+COPY pyproject.toml ./
+COPY src/ ./src/
+RUN pip install --no-cache-dir -e .
+
+COPY configs/ ./configs/
+COPY data/vocab/ ./data/vocab/
+
+ENV MODEL_CHECKPOINT=checkpoints/best_model.pt \
+    VOCAB_PATH=data/vocab/nepali_vocab.json \
+    DEVICE=auto
+
+CMD celery -A paryaya.worker.celery_app worker \
+        --loglevel=info \
+        --concurrency=${CELERY_CONCURRENCY:-2} \
+        --queues=celery

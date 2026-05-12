@@ -1,0 +1,25 @@
+FROM pytorch/pytorch:2.8.0-cuda12.4-cudnn9-runtime
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        libsndfile1 ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements-api.txt .
+RUN pip install --no-cache-dir -r requirements-api.txt
+
+COPY pyproject.toml .
+COPY src/ src/
+RUN pip install --no-cache-dir -e .
+
+COPY configs/ configs/
+COPY data/vocab/ data/vocab/
+
+ENV MODEL_PATH=checkpoints/best_model.pt \
+    VOCAB_PATH=data/vocab/nepali_vocab.json \
+    REDIS_URL=redis://redis:6379/0
+
+EXPOSE 8000
+
+CMD ["uvicorn", "paryaya.api.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
