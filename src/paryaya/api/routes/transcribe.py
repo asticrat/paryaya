@@ -16,7 +16,6 @@ from fastapi import APIRouter, HTTPException, Request, UploadFile, status
 from paryaya import __version__
 from paryaya.api.schemas import TranscribeResponse
 from paryaya.api.state import MODULE_STATE
-from paryaya.inference.transcribe import transcribe_bytes
 
 router = APIRouter(prefix="/v1", tags=["transcription"])
 
@@ -45,11 +44,10 @@ async def transcribe(request: Request, file: UploadFile) -> TranscribeResponse:
             detail=f"File exceeds {_MAX_AUDIO_MB} MB limit. Use /v1/transcribe/async for large files.",
         )
 
+    backend = MODULE_STATE.get("backend", "whisper")
     model   = MODULE_STATE.get("model")
-    tok     = MODULE_STATE.get("tokenizer")
-    device  = MODULE_STATE.get("device", "cpu")
 
-    if model is None or tok is None:
+    if model is None:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Model not loaded",
@@ -57,7 +55,13 @@ async def transcribe(request: Request, file: UploadFile) -> TranscribeResponse:
 
     t0 = time.perf_counter()
     try:
-        result = transcribe_bytes(audio_bytes, model, tok, device, _BEAM_WIDTH)
+        if backend == "whisper":
+            result = model.transcribe_bytes(audio_bytes)
+        else:
+            from paryaya.inference.transcribe import transcribe_bytes as _tb
+            tok    = MODULE_STATE.get("tokenizer")
+            device = MODULE_STATE.get("device", "cpu")
+            result = _tb(audio_bytes, model, tok, device, _BEAM_WIDTH)
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

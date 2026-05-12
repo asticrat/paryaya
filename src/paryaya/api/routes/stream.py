@@ -17,7 +17,6 @@ import numpy as np
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from paryaya.api.state import MODULE_STATE
-from paryaya.inference.transcribe import transcribe_audio_array
 
 router = APIRouter(tags=["streaming"])
 
@@ -29,11 +28,10 @@ _INT16_MAX   = 32768.0
 async def stream(ws: WebSocket) -> None:
     await ws.accept()
 
-    model  = MODULE_STATE.get("model")
-    tok    = MODULE_STATE.get("tokenizer")
-    device = MODULE_STATE.get("device", "cpu")
+    backend = MODULE_STATE.get("backend", "whisper")
+    model   = MODULE_STATE.get("model")
 
-    if model is None or tok is None:
+    if model is None:
         await ws.close(code=4003, reason="Model not loaded")
         return
 
@@ -55,8 +53,8 @@ async def stream(ws: WebSocket) -> None:
 
                 elif ctrl.get("type") == "stop":
                     if pcm_buffer:
-                        audio = _concat(pcm_buffer)
-                        result = transcribe_audio_array(audio, model, tok, device)
+                        audio  = _concat(pcm_buffer)
+                        result = _transcribe(audio, sample_rate, backend, model)
                         await ws.send_text(json.dumps({
                             "type":        "final",
                             "transcript":  result["transcript"],
@@ -75,7 +73,7 @@ async def stream(ws: WebSocket) -> None:
 
                 if chunk_count % _CHUNK_BATCH == 0:
                     audio  = _concat(pcm_buffer)
-                    result = transcribe_audio_array(audio, model, tok, device)
+                    result = _transcribe(audio, sample_rate, backend, model)
                     await ws.send_text(json.dumps({
                         "type":       "partial",
                         "transcript": result["transcript"],
@@ -87,3 +85,12 @@ async def stream(ws: WebSocket) -> None:
 
 def _concat(chunks: list[np.ndarray]) -> np.ndarray:
     return np.concatenate(chunks).astype(np.float32)
+
+
+def _transcribe(audio: np.ndarray, sample_rate: int, backend: str, model) -> dict:
+    if backend == "whisper":
+        return model.transcribe(audio, sample_rate=sample_rate)
+    from paryaya.inference.transcribe import transcribe_audio_array
+    tok    = MODULE_STATE.get("tokenizer")
+    device = MODULE_STATE.get("device", "cpu")
+    return transcribe_audio_array(audio, model, tok, device)

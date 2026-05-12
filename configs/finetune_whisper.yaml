@@ -1,0 +1,38 @@
+model:
+  base: "openai/whisper-medium"   # 244M params — good balance of speed vs accuracy
+  language: "ne"
+  task: "transcribe"
+
+data:
+  dataset: "mozilla-foundation/common_voice_17_0"
+  language_code: "ne"             # Nepali
+  max_duration_sec: 30.0
+  min_duration_sec: 0.5
+
+training:
+  output_dir: "checkpoints/whisper-medium-nepali"
+  max_steps: 4000                 # ~6-8h on A100 40GB
+  warmup_steps: 500
+  learning_rate: 1.0e-5
+  lr_scheduler: "linear"
+  per_device_train_batch_size: 16
+  per_device_eval_batch_size: 8
+  gradient_accumulation_steps: 2  # effective batch = 32
+  fp16: true
+  evaluation_strategy: "steps"
+  eval_steps: 500
+  save_steps: 500
+  save_total_limit: 3
+  load_best_model_at_end: true
+  metric_for_best_model: "wer"
+  greater_is_better: false
+  logging_steps: 25
+  report_to: "wandb"
+  push_to_hub: false
+  predict_with_generate: true
+  generation_max_length: 225
+  early_stopping_patience: 5     # stop if WER doesn't improve for 5 evals
+
+export:
+  hf_dir: "checkpoints/whisper-medium-nepali/best"   # HuggingFace format
+  onnx: false                                         # set true for faster CPU inference
