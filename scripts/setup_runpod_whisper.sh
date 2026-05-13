@@ -36,7 +36,7 @@ echo "✅ Repo ready at $REPO_DIR"
 # ── Python deps ───────────────────────────────────────
 pip install -q --upgrade pip
 pip install -q \
-    "transformers>=4.43" \
+    "transformers>=4.43,<4.50" \
     "datasets>=2.21" \
     "accelerate>=0.33" \
     "evaluate>=0.4" \
