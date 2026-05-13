@@ -35,17 +35,18 @@ echo "✅ Repo ready at $REPO_DIR"
 
 # ── Python deps ───────────────────────────────────────
 pip install -q --upgrade pip
+# Pin compatible versions — newer hub/datasets/transformers conflict with each other
 pip install -q \
-    "transformers>=4.43,<4.50" \
-    "datasets>=2.21,<4.0" \
+    "transformers==4.44.2" \
+    "datasets==2.21.0" \
+    "huggingface-hub>=0.24,<1.0" \
     "accelerate>=0.33" \
     "evaluate>=0.4" \
     "jiwer>=3.0" \
     "soundfile>=0.12" \
     librosa \
     wandb \
-    pyyaml \
-    "huggingface-hub>=0.24"
+    pyyaml
 
 # Install the paryaya package itself
 pip install -q -e .
