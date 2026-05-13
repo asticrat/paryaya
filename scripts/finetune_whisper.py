@@ -250,7 +250,12 @@ def main() -> None:
     print(f"\n🚀 Training on {device} | steps={t_cfg['max_steps']} | fp16={use_fp16}")
     print(f"   Checkpoint dir: {out_dir}\n")
 
-    trainer.train()
+    # Auto-resume from latest checkpoint if one exists
+    checkpoints = sorted(Path(out_dir).glob("checkpoint-*"), key=lambda p: int(p.name.split("-")[1]))
+    resume_from = str(checkpoints[-1]) if checkpoints else None
+    if resume_from:
+        print(f"   Resuming from {resume_from}\n")
+    trainer.train(resume_from_checkpoint=resume_from)
 
     # ── Save best model ───────────────────────────────────────────────────────
     best_dir = Path(exp_cfg.get("hf_dir", f"{out_dir}/best"))
