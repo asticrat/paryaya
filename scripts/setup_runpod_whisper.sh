@@ -37,7 +37,7 @@ echo "✅ Repo ready at $REPO_DIR"
 pip install -q --upgrade pip
 pip install -q \
     "transformers>=4.43,<4.50" \
-    "datasets>=2.21" \
+    "datasets>=2.21,<4.0" \
     "accelerate>=0.33" \
     "evaluate>=0.4" \
     "jiwer>=3.0" \
