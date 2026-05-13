@@ -4,15 +4,16 @@ model:
   task: "transcribe"
 
 data:
-  dataset: "mozilla-foundation/common_voice_17_0"
-  language_code: "ne"             # Nepali
+  dataset: "google/fleurs"        # Mozilla CV moved off HuggingFace Oct 2025; FLEURS is free, no auth
+  language_code: "ne_np"          # Nepali (FLEURS uses BCP-47 codes)
+  text_column: "transcription"    # FLEURS uses "transcription"; Common Voice used "sentence"
   max_duration_sec: 30.0
   min_duration_sec: 0.5
 
 training:
   output_dir: "checkpoints/whisper-medium-nepali"
-  max_steps: 4000                 # ~6-8h on A100 40GB
-  warmup_steps: 500
+  max_steps: 3000                 # ~3-4h on A100 40GB (FLEURS is ~3k train samples)
+  warmup_steps: 200
   learning_rate: 1.0e-5
   lr_scheduler: "linear"
   per_device_train_batch_size: 16
@@ -20,8 +21,8 @@ training:
   gradient_accumulation_steps: 2  # effective batch = 32
   fp16: true
   evaluation_strategy: "steps"
-  eval_steps: 500
-  save_steps: 500
+  eval_steps: 300
+  save_steps: 300
   save_total_limit: 3
   load_best_model_at_end: true
   metric_for_best_model: "wer"

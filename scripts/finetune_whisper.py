@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """
-Fine-tune openai/whisper-medium on Nepali (Common Voice 17).
+Fine-tune openai/whisper-medium on Nepali using Google FLEURS (ne_np).
 
-Prerequisites (one-time):
-  1. Create free account at huggingface.co
-  2. Accept Common Voice terms: huggingface.co/datasets/mozilla-foundation/common_voice_17_0
-  3. Create token: huggingface.co/settings/tokens  (read access)
-  4. export HF_TOKEN=hf_xxxxxxxxxxxx
+NOTE: Mozilla Common Voice moved off HuggingFace in October 2025.
+      We now use google/fleurs (ne_np) which is free, public, and requires no account.
 
-RunPod A100 40GB — estimated cost ~$20 for full run:
+Prerequisites:
+  None required — FLEURS is a public dataset. HF_TOKEN is optional.
+
+RunPod A100 40GB — estimated cost ~$10-15 for full run:
   bash scripts/setup_runpod_whisper.sh
   python scripts/finetune_whisper.py --config configs/finetune_whisper.yaml
 
@@ -78,7 +78,8 @@ def normalize_text(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
-def prepare_dataset(batch, feature_extractor, tokenizer, max_dur: float):
+def prepare_dataset(batch, feature_extractor, tokenizer, max_dur: float,
+                    text_col: str = "transcription"):
     audio = batch["audio"]
     arr   = np.array(audio["array"], dtype=np.float32)
 
@@ -94,8 +95,8 @@ def prepare_dataset(batch, feature_extractor, tokenizer, max_dur: float):
         arr, sampling_rate=audio["sampling_rate"]
     ).input_features[0]
 
-    # Tokenise transcript
-    transcript = normalize_text(batch.get("sentence", "") or "")
+    # Tokenise transcript — column name differs by dataset
+    transcript = normalize_text(batch.get(text_col, "") or "")
     batch["labels"] = tokenizer(transcript).input_ids
     return batch
 
@@ -132,12 +133,7 @@ def main() -> None:
     t_cfg    = cfg["training"]
     exp_cfg  = cfg.get("export", {})
 
-    hf_token = os.getenv("HF_TOKEN")
-    if not hf_token:
-        print("\n⚠️  HF_TOKEN not set.")
-        print("   1. Go to huggingface.co/settings/tokens")
-        print("   2. Create a read token")
-        print("   3. export HF_TOKEN=hf_xxxxxxxxxxxx\n")
+    hf_token = os.getenv("HF_TOKEN") or None  # optional — FLEURS is public
 
     # ── Load processor ────────────────────────────────────────────────────────
     base_model = m_cfg["base"]
@@ -152,16 +148,16 @@ def main() -> None:
     )
 
     # ── Load dataset ──────────────────────────────────────────────────────────
+    text_col = d_cfg.get("text_column", "transcription")
     print(f"\nLoading {d_cfg['dataset']} ({d_cfg['language_code']}) ...")
-    raw = load_dataset(
-        d_cfg["dataset"],
-        d_cfg["language_code"],
-        token=hf_token,
-    )
+    load_kwargs: dict = {"token": hf_token} if hf_token else {}
+    raw = load_dataset(d_cfg["dataset"], d_cfg["language_code"], **load_kwargs)
 
+    # Normalise split names — some datasets use "validation", others "dev"
+    eval_split = "validation" if "validation" in raw else "dev"
     ds = DatasetDict({
         "train": raw["train"],
-        "test":  raw["validation"],
+        "test":  raw[eval_split],
     })
     ds = ds.cast_column("audio", Audio(sampling_rate=16_000))
 
@@ -177,7 +173,9 @@ def main() -> None:
     # ── Pre-process ───────────────────────────────────────────────────────────
     print("\nPre-processing audio + tokenising transcripts ...")
     ds = ds.map(
-        lambda b: prepare_dataset(b, feature_extractor, tokenizer, d_cfg["max_duration_sec"]),
+        lambda b: prepare_dataset(
+            b, feature_extractor, tokenizer, d_cfg["max_duration_sec"], text_col
+        ),
         remove_columns=ds.column_names["train"],
         num_proc=1,
     )
@@ -262,6 +260,7 @@ def main() -> None:
 
     print(f"\n✅ Training complete.")
     print(f"   Best model saved → {best_dir}")
+    print(f"\n   Dataset used: {d_cfg['dataset']} ({d_cfg['language_code']})")
     print(f"\n   Deploy to Paryaya API:")
     print(f"   export ASR_BACKEND=whisper")
     print(f"   export WHISPER_MODEL_PATH={best_dir}")
