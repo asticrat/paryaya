@@ -242,7 +242,7 @@ def main() -> None:
         eval_dataset=ds["test"],
         data_collator=collator,
         compute_metrics=_compute,
-        processing_class=processor.feature_extractor,
+        tokenizer=processor.feature_extractor,
         callbacks=callbacks,
     )
 
