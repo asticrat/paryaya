@@ -665,6 +665,7 @@ async function startMic() {
       audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 }
     });
     audioCtx  = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') await audioCtx.resume();
     nativeSR  = audioCtx.sampleRate;
     sourceNode = audioCtx.createMediaStreamSource(mediaStream);
     analyser   = audioCtx.createAnalyser(); analyser.fftSize = 1024;
@@ -746,7 +747,8 @@ async function openWS() {
     console.log('[paryaya] WS streaming started');
   } catch (err) {
     console.error('[paryaya] WS failed to open:', err);
-    showError('Cannot reach server — check your connection');
+    responseBlock.querySelector('.tp-body').innerHTML =
+      '<div class="tp-idle" style="color:#D42B2B">Cannot reach server — check connection</div>';
     if (ws) { ws.onclose = null; ws.close(); ws = null; }
     setOrbState('listening');
   }
@@ -797,9 +799,20 @@ function onMsg(e) {
   }
 }
 
-orbWrap.addEventListener('click', () => { if (curState === 'idle') startMic(); else stopAll(); });
+orbWrap.addEventListener('click', () => {
+  if (curState === 'idle') {
+    setOrbState('listening'); // immediate feedback before async setup
+    startMic();
+  } else if (curState !== 'translating') {
+    stopAll();
+  }
+});
 orbWrap.addEventListener('keydown', e => {
-  if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); if (curState === 'idle') startMic(); else stopAll(); }
+  if (e.key === ' ' || e.key === 'Enter') {
+    e.preventDefault();
+    if (curState === 'idle') { setOrbState('listening'); startMic(); }
+    else if (curState !== 'translating') stopAll();
+  }
 });
 </script>
 </body>
