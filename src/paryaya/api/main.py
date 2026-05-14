@@ -23,10 +23,11 @@ from pathlib import Path
 import torch
 import pathlib
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from prometheus_fastapi_instrumentator import Instrumentator
 
@@ -87,6 +88,38 @@ async def lifespan(app: FastAPI):
     logger.info("Paryaya API shut down")
 
 
+_ALLOWED_ORIGINS = [
+    "https://paryaya.net",
+    "https://www.paryaya.net",
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+]
+
+_CSP = (
+    "default-src 'self'; "
+    "script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; "
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+    "font-src https://fonts.gstatic.com; "
+    "connect-src 'self' wss://paryaya.net ws://localhost:8000; "
+    "img-src 'self' data:; "
+    "frame-ancestors 'none';"
+)
+
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"]  = "nosniff"
+        response.headers["X-Frame-Options"]          = "DENY"
+        response.headers["X-XSS-Protection"]         = "1; mode=block"
+        response.headers["Referrer-Policy"]           = "strict-origin-when-cross-origin"
+        response.headers["Permissions-Policy"]        = "microphone=(self)"
+        response.headers["Strict-Transport-Security"] = "max-age=15552000; includeSubDomains"
+        response.headers["Content-Security-Policy"]   = _CSP
+        response.headers.pop("Server", None)
+        return response
+
+
 app = FastAPI(
     title="Paryaya API — Nepali Speech Recognition",
     version="1.0.0",
@@ -94,8 +127,9 @@ app = FastAPI(
 )
 
 # Middleware — added in reverse execution order:
-# CORS → RateLimit → APIKey → routes
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+# Security → CORS → RateLimit → APIKey → routes
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(CORSMiddleware, allow_origins=_ALLOWED_ORIGINS, allow_methods=["GET", "POST"], allow_headers=["Authorization", "Content-Type"])
 app.add_middleware(RateLimitMiddleware)
 app.add_middleware(APIKeyMiddleware)
 
@@ -114,4 +148,4 @@ app.mount("/static", StaticFiles(directory=str(_static)), name="static")
 
 @app.get("/")
 async def root():
-    return RedirectResponse("/static/index.html")
+    return FileResponse(str(_static / "index.html"))
