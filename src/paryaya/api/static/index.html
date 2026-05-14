@@ -641,7 +641,7 @@ function setOrbState(s) {
   curState = s;
   orbWrap.classList.toggle('listening', s !== 'idle');
   orbStage.classList.toggle('active', s !== 'idle');
-  const labels = { idle: 'Tap to start listening', listening: '…', speaking: '…', translating: 'Translating…' };
+  const labels = { idle: 'Tap to start listening', listening: '…', speaking: '…', translating: 'Processing… please wait' };
   if (s === 'listening' || s === 'speaking') {
     orbStatus.innerHTML = '<span class="live-dot"></span>' + (s === 'speaking' ? 'Hearing you…' : 'Listening…');
   } else {
@@ -773,7 +773,7 @@ function sendStop() {
   wsStreaming = false;
   if (ws && ws.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify({ type: 'stop' }));
-    setTimeout(() => { if (curState === 'translating') { setOrbState('listening'); } }, 12000);
+    setTimeout(() => { if (curState === 'translating') { showError('Translation timed out — try again'); setOrbState('listening'); } }, 30000);
   } else {
     if (ws) { ws.onclose = null; ws.close(); ws = null; }
     setOrbState('listening');

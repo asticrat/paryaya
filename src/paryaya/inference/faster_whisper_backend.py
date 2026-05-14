@@ -24,7 +24,13 @@ class FasterWhisperBackend:
         compute_type = "int8_float16" if ct2_device == "cuda" else "int8"
 
         self.device = device
-        self.model  = WhisperModel(model_path, device=ct2_device, compute_type=compute_type)
+        self.model  = WhisperModel(
+            model_path,
+            device=ct2_device,
+            compute_type=compute_type,
+            cpu_threads=4,
+            num_workers=1,
+        )
 
     def transcribe(self, audio: np.ndarray, sample_rate: int = 16_000) -> dict:
         duration_sec = len(audio) / sample_rate
@@ -32,7 +38,7 @@ class FasterWhisperBackend:
             audio,
             language="ne",
             task="transcribe",
-            beam_size=5,
+            beam_size=1,
             vad_filter=True,
             vad_parameters={"min_silence_duration_ms": 300},
         )
@@ -50,7 +56,7 @@ class FasterWhisperBackend:
             audio,
             language="ne",
             task="translate",
-            beam_size=5,
+            beam_size=1,
             vad_filter=True,
             vad_parameters={"min_silence_duration_ms": 300},
         )
