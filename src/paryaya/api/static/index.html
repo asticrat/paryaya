@@ -590,7 +590,7 @@ const responseBlock = document.getElementById('responseBlock');
 const WS_URL = location.hostname === 'localhost' || location.hostname === '127.0.0.1'
   ? 'ws://localhost:8000/v1/stream?task=translate'
   : `wss://${location.hostname}/v1/stream?task=translate`;
-const VAD_THRESH = 0.015;
+const VAD_THRESH = 0.004;
 const SILENCE_MS = 1200;
 const MIN_SPEECH = 500;
 const TARGET_SR  = 16000;
