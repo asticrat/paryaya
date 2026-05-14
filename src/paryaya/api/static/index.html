@@ -730,7 +730,10 @@ async function openWS() {
     console.log('[paryaya] WS closed', ev.code, ev.reason);
     if (curState === 'translating' || curState === 'speaking') {
       ws = null; wsStreaming = false;
-      if (!responseBlock.querySelector('[data-final]')) showError('No speech detected — try again');
+      if (!responseBlock.querySelector('[data-final]')) {
+        responseBlock.querySelector('.tp-body').innerHTML =
+          `<div class="tp-idle" style="color:#D42B2B">Connection closed (${ev.code}) — try again</div>`;
+      }
       setOrbState('listening');
     }
     ws = null;
@@ -789,13 +792,20 @@ function showFinal(text, durSec) {
 }
 
 function onMsg(e) {
-  const m = JSON.parse(e.data);
-  if (m.type === 'partial' && m.transcript) {
-    showPartial(m.transcript);
-  } else if (m.type === 'final') {
-    showFinal(m.transcript, m.duration_sec);
-    if (ws) { ws.onclose = null; ws.close(); ws = null; }
-    setOrbState('listening');
+  try {
+    const m = JSON.parse(e.data);
+    console.log('[paryaya] msg', m.type, m.transcript?.slice(0, 60));
+    if (m.type === 'partial' && m.transcript) {
+      showPartial(m.transcript);
+    } else if (m.type === 'final') {
+      showFinal(m.transcript, m.duration_sec);
+      if (ws) { ws.onclose = null; ws.close(); ws = null; }
+      setOrbState('listening');
+    }
+  } catch (err) {
+    console.error('[paryaya] bad WS message:', e.data, err);
+    responseBlock.querySelector('.tp-body').innerHTML =
+      '<div class="tp-idle" style="color:#D42B2B">Server error — check console</div>';
   }
 }
 
