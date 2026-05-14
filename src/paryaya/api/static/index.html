@@ -722,10 +722,11 @@ async function startMic() {
     dataArray  = new Uint8Array(analyser.fftSize);
     sourceNode.connect(analyser);
 
-    preBuf    = [];
-    processor = audioCtx.createScriptProcessor(4096, 1, 1);
-    processor.onaudioprocess = e => {
-      const f32  = e.inputBuffer.getChannelData(0);
+    preBuf = [];
+    await audioCtx.audioWorklet.addModule('/static/worklet.js');
+    processor = new AudioWorkletNode(audioCtx, 'pcm-processor');
+    processor.port.onmessage = (e) => {
+      const f32  = new Float32Array(e.data);
       const down = downsample(f32, nativeSR, TARGET_SR);
       const i16  = new Int16Array(down.length);
       for (let i = 0; i < down.length; i++) i16[i] = Math.max(-32768, Math.min(32767, down[i] * 32768));

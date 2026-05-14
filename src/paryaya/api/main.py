@@ -97,10 +97,11 @@ _ALLOWED_ORIGINS = [
 
 _CSP = (
     "default-src 'self'; "
-    "script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; "
+    "script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://static.cloudflareinsights.com; "
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
     "font-src https://fonts.gstatic.com; "
-    "connect-src 'self' wss://paryaya.net ws://localhost:8000; "
+    "connect-src 'self' wss://paryaya.net ws://localhost:8000 https://cloudflareinsights.com; "
+    "worker-src 'self'; "
     "img-src 'self' data:; "
     "frame-ancestors 'none';"
 )
