@@ -188,7 +188,9 @@
   @keyframes haloPulse { 0%,100%{transform:scale(1);opacity:0.7} 50%{transform:scale(1.18);opacity:1} }
   .orb-canvas {
     width: 180px; height: 180px; border-radius: 50%;
-    filter: drop-shadow(0 18px 36px rgba(212,43,43,0.35)) drop-shadow(0 4px 12px rgba(0,0,0,0.12));
+    filter: drop-shadow(0 18px 36px rgba(212,43,43,0.40)) drop-shadow(0 4px 14px rgba(0,0,0,0.18));
+    outline: 2px solid rgba(212,43,43,0.28);
+    outline-offset: -1px;
     animation: orbBreathe 5s ease-in-out infinite;
   }
   .orb-wrap.speaking .orb-canvas { animation: orbBreatheFast 1.4s ease-in-out infinite; }
@@ -605,7 +607,9 @@ document.querySelectorAll('.animate-on-scroll').forEach(el => scrollObs.observe(
       float hl2=pow(max(0.,1.-length(v-vec2(.38,.32))*5.2),4.0);
       col=mix(col,vec3(1),hl2*.55);
       col*=pow(1.0-d,.38);
-      gl_FragColor=vec4(col,smoothstep(1.0,.86,d));
+      float rim=smoothstep(.72,.95,d);
+      col=mix(col,vec3(.55,.06,.06),rim*.75);
+      gl_FragColor=vec4(col,smoothstep(1.0,.92,d));
     }`;
 
   function sh(type, src) {
