@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Paryaya — Live Translation</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #0f1117;
+      color: #e8e8f0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 32px;
+      padding: 24px;
+    }
+
+    header { text-align: center; }
+    header h1 { font-size: 2rem; font-weight: 700; letter-spacing: -0.5px; }
+    header p  { margin-top: 6px; color: #8888a8; font-size: 0.95rem; }
+    .badge {
+      display: inline-block;
+      background: #1e1e2e;
+      border: 1px solid #2e2e4e;
+      border-radius: 999px;
+      padding: 4px 14px;
+      font-size: 0.8rem;
+      color: #7878a8;
+      margin-top: 10px;
+    }
+
+    .mic-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+      user-select: none;
+    }
+
+    #mic-btn {
+      width: 110px;
+      height: 110px;
+      border-radius: 50%;
+      border: none;
+      background: #1e1e2e;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.15s, box-shadow 0.15s;
+      touch-action: none;
+    }
+
+    #mic-btn:hover { background: #2a2a3e; }
+
+    #mic-btn.recording {
+      background: #3730a3;
+      box-shadow: 0 0 0 14px rgba(99,102,241,0.18), 0 0 0 28px rgba(99,102,241,0.07);
+      animation: pulse 1.2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%,100% { box-shadow: 0 0 0 14px rgba(99,102,241,0.18), 0 0 0 28px rgba(99,102,241,0.07); }
+      50%      { box-shadow: 0 0 0 20px rgba(99,102,241,0.12), 0 0 0 40px rgba(99,102,241,0.03); }
+    }
+
+    #mic-btn svg { width: 40px; height: 40px; fill: #a5a5c5; transition: fill 0.15s; }
+    #mic-btn.recording svg { fill: #c7c7ff; }
+
+    #status { font-size: 0.85rem; color: #5a5a80; letter-spacing: 0.3px; }
+    #status.live { color: #818cf8; }
+    #status.error { color: #f87171; }
+
+    .hint {
+      font-size: 0.78rem;
+      color: #3a3a58;
+    }
+
+    .output-card {
+      width: 100%;
+      max-width: 640px;
+      background: #1a1a2e;
+      border: 1px solid #2a2a42;
+      border-radius: 16px;
+      padding: 24px 28px;
+      min-height: 160px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .output-label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; color: #4a4a6a; }
+
+    #transcript {
+      font-size: 1.35rem;
+      line-height: 1.65;
+      color: #dde;
+      min-height: 80px;
+      word-break: break-word;
+    }
+    #transcript.partial { color: #8888bb; }
+    #transcript:empty::before {
+      content: "Hold the button and speak in Nepali…";
+      color: #3a3a5a;
+      font-style: italic;
+      font-size: 1rem;
+    }
+
+    .meta { font-size: 0.78rem; color: #4a4a6a; border-top: 1px solid #2a2a42; padding-top: 10px; }
+
+    .server-row { display: flex; gap: 10px; align-items: center; max-width: 640px; width: 100%; }
+    .server-row input {
+      flex: 1;
+      background: #1a1a2e;
+      border: 1px solid #2a2a42;
+      border-radius: 8px;
+      color: #ccd;
+      padding: 8px 14px;
+      font-size: 0.85rem;
+      outline: none;
+    }
+    .server-row input:focus { border-color: #4a4a8a; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>Paryaya</h1>
+    <p>Nepali Speech &rarr; English Translation</p>
+    <span class="badge">Live &middot; Powered by Whisper</span>
+  </header>
+
+  <div class="server-row">
+    <input id="server-url" type="text" value="ws://localhost:8000/v1/stream?task=translate" />
+  </div>
+
+  <div class="mic-wrap">
+    <button id="mic-btn" title="Hold to speak">
+      <svg viewBox="0 0 24 24"><path d="M12 1a4 4 0 0 1 4 4v6a4 4 0 0 1-8 0V5a4 4 0 0 1 4-4zm-1 18.93V22h2v-2.07A8.001 8.001 0 0 0 20 12h-2a6 6 0 0 1-12 0H4a8.001 8.001 0 0 0 7 7.93z"/></svg>
+    </button>
+    <span id="status">Hold to speak</span>
+    <span class="hint">Hold button → speak Nepali → release → English appears</span>
+  </div>
+
+  <div class="output-card">
+    <div class="output-label">English Translation</div>
+    <div id="transcript"></div>
+    <div class="meta" id="meta"></div>
+  </div>
+
+  <script>
+    const btn          = document.getElementById("mic-btn");
+    const statusEl     = document.getElementById("status");
+    const transcriptEl = document.getElementById("transcript");
+    const metaEl       = document.getElementById("meta");
+    const urlInput     = document.getElementById("server-url");
+
+    let ws         = null;
+    let audioCtx   = null;
+    let processor  = null;
+    let sourceNode = null;
+    let mediaStream = null;
+    let recording  = false;
+    const SAMPLE_RATE = 16000;
+
+    // Push-to-talk: mousedown / touchstart → start, mouseup / touchend → stop
+    btn.addEventListener("mousedown",  e => { e.preventDefault(); startRecording(); });
+    btn.addEventListener("touchstart", e => { e.preventDefault(); startRecording(); }, { passive: false });
+    btn.addEventListener("mouseup",    e => { e.preventDefault(); stopRecording(); });
+    btn.addEventListener("mouseleave", e => { if (recording) stopRecording(); });
+    btn.addEventListener("touchend",   e => { e.preventDefault(); stopRecording(); }, { passive: false });
+
+    async function startRecording() {
+      if (recording) return;
+      try {
+        mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+
+        ws = new WebSocket(urlInput.value);
+        ws.binaryType = "arraybuffer";
+
+        await new Promise((resolve, reject) => {
+          ws.onopen  = resolve;
+          ws.onerror = reject;
+        });
+
+        ws.send(JSON.stringify({ type: "start", sample_rate: SAMPLE_RATE }));
+        ws.onmessage = handleMessage;
+        ws.onclose   = () => { if (recording) setRecording(false); };
+
+        audioCtx   = new AudioContext({ sampleRate: SAMPLE_RATE });
+        sourceNode = audioCtx.createMediaStreamSource(mediaStream);
+        processor  = audioCtx.createScriptProcessor(4096, 1, 1);
+
+        processor.onaudioprocess = (e) => {
+          if (!recording || ws.readyState !== WebSocket.OPEN) return;
+          const f32  = e.inputBuffer.getChannelData(0);
+          const i16  = new Int16Array(f32.length);
+          for (let i = 0; i < f32.length; i++)
+            i16[i] = Math.max(-32768, Math.min(32767, f32[i] * 32768));
+          ws.send(i16.buffer);
+        };
+
+        sourceNode.connect(processor);
+        processor.connect(audioCtx.destination);
+        setRecording(true);
+        transcriptEl.className = "partial";
+        transcriptEl.textContent = "";
+
+      } catch (err) {
+        setStatus("Mic access denied or API not running", true);
+        cleanup(false);
+      }
+    }
+
+    function stopRecording() {
+      if (!recording) return;
+      setRecording(false);
+      setStatus("Translating…");
+      transcriptEl.className = "partial";
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: "stop" }));
+        ws.onclose = null;
+      } else {
+        cleanup(false);
+      }
+    }
+
+    function handleMessage(e) {
+      const msg = JSON.parse(e.data);
+      if (msg.type === "partial" && msg.transcript) {
+        transcriptEl.textContent = msg.transcript;
+        transcriptEl.className   = "partial";
+      } else if (msg.type === "final") {
+        transcriptEl.textContent = msg.transcript || transcriptEl.textContent;
+        transcriptEl.className   = "";
+        if (msg.duration_sec) metaEl.textContent = `Duration: ${msg.duration_sec}s`;
+        cleanup(false);
+      }
+    }
+
+    function cleanup(sendStop = true) {
+      if (processor)    { processor.disconnect();  processor = null; }
+      if (sourceNode)   { sourceNode.disconnect(); sourceNode = null; }
+      if (audioCtx)     { audioCtx.close();        audioCtx = null; }
+      if (mediaStream)  { mediaStream.getTracks().forEach(t => t.stop()); mediaStream = null; }
+      if (ws) {
+        if (sendStop && ws.readyState === WebSocket.OPEN)
+          ws.send(JSON.stringify({ type: "stop" }));
+        ws.close();
+        ws = null;
+      }
+    }
+
+    function setRecording(active) {
+      recording = active;
+      btn.classList.toggle("recording", active);
+      statusEl.classList.toggle("live", active);
+      statusEl.classList.remove("error");
+      statusEl.textContent = active ? "Listening…" : "Hold to speak";
+      urlInput.disabled = active;
+    }
+
+    function setStatus(msg, err = false) {
+      statusEl.textContent = msg;
+      statusEl.classList.toggle("error", err);
+      statusEl.classList.remove("live");
+    }
+  </script>
+</body>
+</html>

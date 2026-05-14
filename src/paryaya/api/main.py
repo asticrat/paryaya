@@ -21,8 +21,12 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 import torch
+import pathlib
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
+from fastapi.staticfiles import StaticFiles
 
 from prometheus_fastapi_instrumentator import Instrumentator
 
@@ -53,10 +57,10 @@ async def lifespan(app: FastAPI):
     MODULE_STATE["backend"] = backend
 
     if backend == "whisper":
-        from paryaya.inference.whisper_backend import load_whisper_backend
-        whisper = load_whisper_backend(device=device)
+        from paryaya.inference.faster_whisper_backend import load_faster_whisper_backend
+        whisper = load_faster_whisper_backend(device=device)
         MODULE_STATE["model"] = whisper
-        logger.info("Whisper backend loaded: %s", os.getenv("WHISPER_MODEL_PATH", "openai/whisper-medium"))
+        logger.info("Whisper backend loaded: %s", os.getenv("WHISPER_MODEL_PATH", "checkpoints/whisper-medium-nepali-ct2"))
 
     else:  # paryaya (custom conformer)
         from paryaya.model.asr_model import ParyayaASR
@@ -103,3 +107,11 @@ app.include_router(auth.router)
 
 # Prometheus metrics — exposed at /metrics (public, no auth)
 Instrumentator().instrument(app).expose(app)
+
+# Static files
+_static = pathlib.Path(__file__).parent / "static"
+app.mount("/static", StaticFiles(directory=str(_static)), name="static")
+
+@app.get("/")
+async def root():
+    return RedirectResponse("/static/index.html")

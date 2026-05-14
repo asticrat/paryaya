@@ -14,9 +14,9 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
-_SKIP = {"/health", "/health/ready", "/docs", "/openapi.json", "/redoc", "/metrics"}
+_SKIP = {"/health", "/health/ready", "/docs", "/openapi.json", "/redoc", "/metrics", "/", "/favicon.ico"}
 # Auth routes authenticate themselves via ADMIN-SECRET-KEY header
-_SKIP_PREFIX = ("/auth/",)
+_SKIP_PREFIX = ("/auth/", "/static/")
 _REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
 

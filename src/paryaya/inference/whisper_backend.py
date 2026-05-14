@@ -46,10 +46,8 @@ class WhisperBackend:
         self.model.to(device)
         self.model.eval()
 
-        # Force Nepali transcription (prevent language detection drift)
-        self.forced_decoder_ids = self.processor.get_decoder_prompt_ids(
-            language="ne", task="transcribe"
-        )
+        # Suppress forced_decoder_ids — use language/task kwargs in generate() instead (transformers 5+)
+        self.model.generation_config.forced_decoder_ids = None
 
     def transcribe(self, audio: np.ndarray, sample_rate: int = 16_000) -> dict:
         """Transcribe a mono float32 numpy array.
@@ -70,7 +68,8 @@ class WhisperBackend:
         with torch.no_grad():
             predicted_ids = self.model.generate(
                 input_features,
-                forced_decoder_ids=self.forced_decoder_ids,
+                language="ne",
+                task="transcribe",
             )
 
         raw_text   = self.processor.batch_decode(predicted_ids, skip_special_tokens=True)[0]
@@ -92,6 +91,41 @@ class WhisperBackend:
             "duration_sec": round(duration_sec, 3),
             "word_count":   len(transcript.split()) if transcript else 0,
         }
+
+    def translate(self, audio: np.ndarray, sample_rate: int = 16_000) -> dict:
+        """Translate Nepali speech directly to English text."""
+        duration_sec = len(audio) / sample_rate
+
+        inputs = self.processor(audio, sampling_rate=sample_rate, return_tensors="pt")
+        input_features = inputs["input_features"].to(self.device)
+
+        with torch.no_grad():
+            predicted_ids = self.model.generate(
+                input_features,
+                language="ne",
+                task="translate",
+            )
+
+        text = self.processor.batch_decode(predicted_ids, skip_special_tokens=True)[0].strip()
+
+        return {
+            "transcript":   text,
+            "confidence":   1.0,
+            "duration_sec": round(duration_sec, 3),
+            "word_count":   len(text.split()) if text else 0,
+        }
+
+    def translate_bytes(self, audio_bytes: bytes) -> dict:
+        import tempfile
+        import librosa
+        with tempfile.NamedTemporaryFile(suffix=".audio", delete=False) as f:
+            f.write(audio_bytes)
+            tmp = f.name
+        try:
+            audio, _ = librosa.load(tmp, sr=16_000, mono=True)
+            return self.translate(audio)
+        finally:
+            Path(tmp).unlink(missing_ok=True)
 
     def transcribe_file(self, path: str | Path) -> dict:
         import librosa

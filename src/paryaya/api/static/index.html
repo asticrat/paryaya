@@ -1,0 +1,852 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Paryaya — Nepali Speech, Written Instantly</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600&family=DM+Sans:wght@400;500;600;700&family=Noto+Sans+Devanagari:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+  :root {
+    --white:       #FFFFFF;
+    --off-white:   #FAFAFA;
+    --glass:       rgba(255,255,255,0.55);
+    --glass-border:rgba(255,255,255,0.75);
+    --red:         #D42B2B;
+    --red-light:   #FF4444;
+    --red-glow:    rgba(212,43,43,0.15);
+    --text-dark:   #0F0F0F;
+    --text-mid:    #4A4A4A;
+    --text-light:  #9A9A9A;
+    --shadow:      rgba(0,0,0,0.08);
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: 'DM Sans', system-ui, sans-serif;
+    background: var(--white);
+    color: var(--text-dark);
+    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  .display { font-family: 'Cormorant Garamond', serif; font-weight: 500; }
+  .devanagari { font-family: 'Noto Sans Devanagari', serif; }
+
+  /* Glass */
+  .glass {
+    background: var(--glass);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid var(--glass-border);
+    border-radius: 20px;
+    box-shadow: 0 8px 32px var(--shadow), inset 0 1px 0 rgba(255,255,255,0.9);
+  }
+
+  /* ── NAVBAR ── */
+  nav.navbar {
+    position: fixed; top: 0; left: 0; width: 100%; z-index: 100;
+    background: rgba(255,255,255,0.80);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    padding: 16px 48px;
+    display: flex; align-items: center; justify-content: space-between;
+    transition: box-shadow 0.3s ease;
+  }
+  nav.navbar.scrolled { box-shadow: 0 1px 0 rgba(0,0,0,0.06); }
+  .logo {
+    display: flex; align-items: baseline;
+    font-family: 'Cormorant Garamond', serif; font-size: 26px; font-weight: 600; letter-spacing: -0.01em;
+    text-decoration: none;
+  }
+  .logo .pa { color: var(--red); font-family: 'Noto Sans Devanagari', serif; font-size: 28px; margin-right: 1px; line-height: 1; }
+  .logo .rest { color: var(--text-dark); }
+  .nav-links { display: flex; gap: 36px; }
+  .nav-links a { font-size: 14px; color: var(--text-mid); text-decoration: none; transition: color 0.2s ease; }
+  .nav-links a:hover { color: var(--red); }
+  .btn {
+    font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 500;
+    border: none; cursor: pointer; transition: all 0.2s ease;
+    text-decoration: none; display: inline-flex; align-items: center; justify-content: center;
+  }
+  .btn-primary {
+    background: var(--red); color: white; padding: 10px 20px; border-radius: 8px;
+    box-shadow: 0 2px 12px rgba(212,43,43,0.3);
+  }
+  .btn-primary:hover { background: #b81f1f; transform: translateY(-1px); box-shadow: 0 6px 20px rgba(212,43,43,0.4); }
+  .btn-outline { background: transparent; color: var(--red); border: 1.5px solid var(--red); padding: 12px 22px; border-radius: 10px; }
+  .btn-outline:hover { background: var(--red); color: white; }
+  .btn-large { padding: 14px 32px; font-size: 15px; border-radius: 10px; }
+  .btn-ghost { background: transparent; color: var(--red); padding: 14px 18px; }
+
+  /* ── HERO ── */
+  .hero {
+    position: relative; min-height: 100vh; padding: 140px 48px 80px;
+    background: var(--white); overflow: hidden;
+    display: flex; align-items: center; justify-content: center;
+  }
+  #hero-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; }
+  .hero-inner {
+    position: relative; z-index: 2; max-width: 880px; text-align: center;
+    display: flex; flex-direction: column; align-items: center; gap: 28px;
+  }
+  .badge {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 6px 16px; border-radius: 100px;
+    background: var(--glass);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid var(--glass-border);
+    font-size: 13px; color: var(--text-mid);
+    box-shadow: 0 4px 16px var(--shadow);
+  }
+  .badge .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--red); animation: pulse 2s ease-out infinite; }
+  .hero-headline {
+    font-family: 'Cormorant Garamond', serif; font-size: 88px; font-weight: 600;
+    line-height: 1.05; letter-spacing: -0.02em; color: var(--text-dark);
+  }
+  .hero-headline .accent { color: var(--red); font-style: italic; text-shadow: 0 0 40px rgba(212,43,43,0.2); }
+  .hero-sub { font-size: 18px; color: var(--text-mid); max-width: 520px; line-height: 1.55; }
+  .hero-ctas { display: flex; gap: 16px; align-items: center; }
+  .code-card {
+    margin-top: 24px; max-width: 540px; width: 100%; padding: 22px 24px; text-align: left;
+    font-family: 'Courier New', monospace; font-size: 13px; line-height: 1.75; color: var(--text-dark);
+    animation: float 6s ease-in-out infinite;
+  }
+  .code-card .prompt { color: var(--text-light); }
+  .code-card .flag { color: var(--text-mid); }
+  .code-card .arrow { color: var(--red); font-weight: 700; }
+  .code-card .num { color: #2C8F4A; }
+  .code-card .nepali { font-family: 'Noto Sans Devanagari', serif; font-size: 14px; }
+  .code-card .indent { padding-left: 28px; display: block; }
+
+  /* Fade-up stagger */
+  .fade-up { opacity: 0; transform: translateY(24px); animation: fadeUp 0.8s cubic-bezier(0.2,0.8,0.2,1) forwards; }
+  .d-0 { animation-delay: 0s; } .d-1 { animation-delay: 0.1s; }
+  .d-2 { animation-delay: 0.2s; } .d-3 { animation-delay: 0.3s; } .d-5 { animation-delay: 0.5s; }
+
+  /* ── SECTIONS ── */
+  section { padding: 120px 48px; }
+  .section-eyebrow { font-size: 11px; color: var(--red); letter-spacing: 2.4px; text-transform: uppercase; font-weight: 600; }
+  .section-head { font-family: 'Cormorant Garamond', serif; font-size: 52px; font-weight: 500; line-height: 1.1; letter-spacing: -0.02em; color: var(--text-dark); }
+  .section-sub { font-size: 18px; color: var(--text-mid); line-height: 1.55; }
+  .container { max-width: 1200px; margin: 0 auto; }
+  .text-center { text-align: center; }
+
+  /* ── HOW IT WORKS ── */
+  .how { background: var(--off-white); }
+  .how-head { text-align: center; margin-bottom: 64px; }
+  .how-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+  .step-card { padding: 36px 32px 32px; position: relative; transition: all 0.3s cubic-bezier(0.4,0,0.2,1); }
+  .step-card:hover { transform: translateY(-4px); box-shadow: 0 20px 60px rgba(212,43,43,0.08), inset 0 1px 0 rgba(255,255,255,0.9); }
+  .step-card .num { font-family: 'Cormorant Garamond', serif; font-size: 64px; font-weight: 600; color: var(--red); opacity: 0.18; line-height: 1; margin-bottom: 12px; }
+  .step-card .icon { width: 36px; height: 36px; margin-bottom: 18px; color: var(--red); }
+  .step-card h3 { font-family: 'DM Sans', sans-serif; font-size: 20px; font-weight: 600; margin-bottom: 10px; color: var(--text-dark); }
+  .step-card p { font-size: 15px; line-height: 1.6; color: var(--text-mid); }
+
+  /* ── USE CASES ── */
+  .usecases { background: var(--white); }
+  .uc-layout { display: grid; grid-template-columns: 1fr 1.3fr; gap: 80px; align-items: center; }
+  .uc-left .accent-line { width: 2px; height: 60px; background: var(--red); margin: 28px 0 0; }
+  .uc-left .section-eyebrow { margin-bottom: 16px; display: inline-block; }
+  .uc-left .section-head { font-size: 48px; margin-bottom: 20px; }
+  .uc-left p { font-size: 17px; color: var(--text-mid); line-height: 1.6; max-width: 420px; }
+  .uc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .uc-card { padding: 28px; transition: all 0.3s cubic-bezier(0.4,0,0.2,1); }
+  .uc-card:hover { transform: translateY(-4px); box-shadow: 0 20px 60px rgba(212,43,43,0.08), inset 0 1px 0 rgba(255,255,255,0.9); }
+  .uc-card .uc-icon { width: 36px; height: 36px; color: var(--red); margin-bottom: 16px; }
+  .uc-card h4 { font-family: 'DM Sans', sans-serif; font-size: 17px; font-weight: 600; margin-bottom: 8px; }
+  .uc-card p { font-size: 14px; line-height: 1.55; color: var(--text-mid); }
+
+  /* ── DEMO ── */
+  .demo { background: linear-gradient(180deg, rgba(212,43,43,0.02), rgba(212,43,43,0.04)); }
+  .demo-head { text-align: center; margin-bottom: 56px; }
+  .demo-head .section-sub { margin-top: 14px; }
+  .demo-card { max-width: 880px; margin: 0 auto; padding: 40px; }
+  .demo-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; }
+  .demo-label { font-size: 11px; color: var(--text-light); text-transform: uppercase; letter-spacing: 1.6px; font-weight: 600; margin-bottom: 12px; }
+
+  /* ── ORB ── */
+  .orb-stage {
+    position: relative; width: 100%; height: 300px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
+  }
+  .orb-wrap {
+    position: relative; width: 200px; height: 200px;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .orb-halo {
+    position: absolute; inset: -50px; border-radius: 50%;
+    background: radial-gradient(closest-side, rgba(212,43,43,0.25), rgba(212,43,43,0) 70%);
+    filter: blur(14px); opacity: 0.55;
+    transition: opacity 0.4s ease, transform 0.4s ease; pointer-events: none;
+  }
+  .orb-wrap.listening .orb-halo { opacity: 1; animation: haloPulse 1.6s ease-in-out infinite; }
+  @keyframes haloPulse { 0%,100%{transform:scale(1);opacity:0.7} 50%{transform:scale(1.18);opacity:1} }
+  .orb-svg {
+    width: 180px; height: 180px; border-radius: 50%;
+    filter: drop-shadow(0 18px 36px rgba(212,43,43,0.30)) drop-shadow(0 4px 12px rgba(0,0,0,0.10));
+    transition: transform 0.5s cubic-bezier(0.2,0.8,0.2,1);
+    animation: orbBreathe 5s ease-in-out infinite; overflow: visible;
+  }
+  .orb-wrap.listening .orb-svg { animation: orbBreatheFast 1.4s ease-in-out infinite; }
+  @keyframes orbBreathe { 0%,100%{transform:scale(1)} 50%{transform:scale(1.025)} }
+  @keyframes orbBreatheFast { 0%,100%{transform:scale(1.03)} 50%{transform:scale(1.10)} }
+  .blob-1 { animation: blobA 8s ease-in-out infinite; transform-origin: center; }
+  .blob-2 { animation: blobB 11s ease-in-out infinite; transform-origin: center; }
+  .blob-3 { animation: blobC 9.5s ease-in-out infinite; transform-origin: center; }
+  .blob-4 { animation: blobD 13s ease-in-out infinite; transform-origin: center; }
+  .blob-5 { animation: blobE 10.5s ease-in-out infinite; transform-origin: center; }
+  .orb-wrap.listening .blob-1 { animation-duration: 2.6s; }
+  .orb-wrap.listening .blob-2 { animation-duration: 3.2s; }
+  .orb-wrap.listening .blob-3 { animation-duration: 2.4s; }
+  .orb-wrap.listening .blob-4 { animation-duration: 3.8s; }
+  .orb-wrap.listening .blob-5 { animation-duration: 3.0s; }
+  @keyframes blobA { 0%,100%{transform:translate(0,0) scale(1)} 33%{transform:translate(20px,18px) scale(1.1)} 66%{transform:translate(-12px,24px) scale(0.95)} }
+  @keyframes blobB { 0%,100%{transform:translate(0,0) scale(1)} 50%{transform:translate(-22px,-18px) scale(1.15)} }
+  @keyframes blobC { 0%,100%{transform:translate(0,0) scale(1) rotate(0deg)} 50%{transform:translate(18px,-14px) scale(1.08) rotate(20deg)} }
+  @keyframes blobD { 0%,100%{transform:translate(0,0) scale(1)} 40%{transform:translate(-14px,22px) scale(0.9)} 70%{transform:translate(8px,-18px) scale(1.12)} }
+  @keyframes blobE { 0%,100%{transform:translate(0,0) scale(1)} 50%{transform:translate(14px,-22px) scale(1.18)} }
+  .orb-mic {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    z-index: 3; color: var(--red); opacity: 0.55;
+    transition: opacity 0.25s ease, transform 0.25s ease; pointer-events: none;
+  }
+  .orb-wrap.listening .orb-mic { opacity: 0; transform: scale(0.6); }
+  .orb-mic svg { width: 30px; height: 30px; filter: drop-shadow(0 1px 2px rgba(0,0,0,0.15)); }
+  .orb-status {
+    font-family: 'DM Sans', sans-serif; font-size: 14px; color: var(--text-mid);
+    letter-spacing: 0.3px; min-height: 20px; text-align: center;
+  }
+  .orb-status .live-dot {
+    display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+    background: var(--red); margin-right: 8px; vertical-align: middle;
+    animation: pulse 1.4s ease-out infinite;
+  }
+  .waveform {
+    display: flex; align-items: center; justify-content: center; gap: 4px;
+    height: 24px; opacity: 0; transition: opacity 0.3s ease;
+  }
+  .orb-stage.active .waveform { opacity: 1; }
+  .waveform .bar { width: 3px; background: var(--red); border-radius: 2px; height: 6px; transform-origin: center; }
+  .orb-error { font-size: 12px; color: var(--red); text-align: center; min-height: 16px; }
+
+  /* Response block */
+  .response-block {
+    background: #0F0F0F; border-radius: 12px; padding: 22px 24px;
+    font-family: 'Courier New', monospace; font-size: 13px; line-height: 1.8;
+    color: #E8E8E8; min-height: 248px; position: relative; overflow: hidden;
+  }
+  .response-block .placeholder { color: #4A4A4A; font-style: italic; }
+  .response-block .key { color: #FF6B6B; }
+  .response-block .str { color: #98C379; }
+  .response-block .num { color: #E5C07B; }
+  .caret { display: inline-block; width: 8px; height: 14px; background: var(--red); margin-left: 4px; vertical-align: middle; animation: caretBlink 1s steps(2) infinite; }
+  @keyframes caretBlink { 50%{opacity:0} }
+
+  /* ── STATS ── */
+  .stats { background: var(--white); padding: 100px 48px; }
+  .stats-grid { display: grid; grid-template-columns: repeat(4,1fr); max-width: 1100px; margin: 0 auto; }
+  .stat { text-align: center; padding: 16px 24px; border-right: 1px solid rgba(0,0,0,0.06); }
+  .stat:last-child { border-right: none; }
+  .stat-value { font-family: 'Cormorant Garamond', serif; font-size: 64px; font-weight: 600; color: var(--red); line-height: 1; letter-spacing: -0.02em; margin-bottom: 12px; }
+  .stat-label { font-size: 14px; color: var(--text-mid); font-weight: 500; }
+
+  /* ── FOOTER ── */
+  footer { background: #0F0F0F; color: white; padding: 80px 48px 32px; }
+  .footer-grid { display: grid; grid-template-columns: 1.4fr 1fr 1fr 1fr; gap: 60px; max-width: 1200px; margin: 0 auto 60px; }
+  .footer-brand .logo .rest { color: white; }
+  .footer-brand .deva { font-family: 'Noto Sans Devanagari', serif; color: var(--red); font-size: 14px; margin: 6px 0 16px; letter-spacing: 0.5px; }
+  .footer-brand p { font-size: 14px; color: var(--text-light); line-height: 1.55; max-width: 280px; }
+  .footer-col h5 { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 1.6px; color: var(--text-light); margin-bottom: 18px; }
+  .footer-col a { display: block; color: white; text-decoration: none; font-size: 14px; padding: 6px 0; transition: color 0.2s ease; }
+  .footer-col a:hover { color: var(--red-light); }
+  .footer-bottom { border-top: 1px solid rgba(255,255,255,0.08); max-width: 1200px; margin: 0 auto; padding-top: 24px; display: flex; justify-content: space-between; font-size: 13px; color: var(--text-mid); }
+
+  /* ── ANIMATIONS ── */
+  @keyframes fadeUp { from{opacity:0;transform:translateY(24px)} to{opacity:1;transform:translateY(0)} }
+  @keyframes fadeIn { from{opacity:0} to{opacity:1} }
+  @keyframes float { 0%,100%{transform:translateY(0px)} 50%{transform:translateY(-12px)} }
+  @keyframes pulse { 0%,100%{box-shadow:0 0 0 0 rgba(212,43,43,0.5)} 50%{box-shadow:0 0 0 6px rgba(212,43,43,0)} }
+  .animate-on-scroll {
+    opacity: 0; transform: translateY(32px);
+    transition: opacity 0.7s ease, transform 0.7s cubic-bezier(0.4,0,0.2,1);
+  }
+  .animate-on-scroll.visible { opacity: 1; transform: translateY(0); }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 1024px) {
+    .how-grid { grid-template-columns: 1fr; max-width: 520px; margin: 0 auto; }
+    .uc-layout { grid-template-columns: 1fr; gap: 40px; }
+    .demo-grid { grid-template-columns: 1fr; }
+    .stats-grid { grid-template-columns: 1fr 1fr; }
+    .stat:nth-child(2) { border-right: none; }
+    .stat:nth-child(1), .stat:nth-child(2) { border-bottom: 1px solid rgba(0,0,0,0.06); padding-bottom: 32px; margin-bottom: 32px; }
+    .footer-grid { grid-template-columns: 1fr 1fr; gap: 40px; }
+  }
+  @media (max-width: 768px) {
+    nav.navbar { padding: 14px 20px; }
+    .nav-links { display: none; }
+    section, .hero { padding-left: 20px; padding-right: 20px; }
+    .hero { padding-top: 100px; padding-bottom: 60px; }
+    .hero-headline { font-size: 48px; }
+    .section-head { font-size: 36px; }
+    .stats-grid { grid-template-columns: 1fr; }
+    .stat { border-right: none; border-bottom: 1px solid rgba(0,0,0,0.06); padding: 24px; }
+    .stat:last-child { border-bottom: none; }
+    .footer-grid { grid-template-columns: 1fr; gap: 32px; }
+    .footer-bottom { flex-direction: column; gap: 8px; align-items: flex-start; }
+    #hero-canvas { display: none; }
+    .code-card { font-size: 11px; padding: 18px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- NAVBAR -->
+<nav class="navbar" id="navbar">
+  <a href="#" class="logo">
+    <span class="pa">प</span><span class="rest">aryaya</span>
+  </a>
+  <div class="nav-links">
+    <a href="#how">Features</a>
+    <a href="#usecases">Use Cases</a>
+    <a href="#demo">Demo</a>
+    <a href="#">Docs</a>
+  </div>
+  <a href="#demo" class="btn btn-primary">Request Early Access</a>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <canvas id="hero-canvas"></canvas>
+  <div class="hero-inner">
+    <div class="badge fade-up d-0">
+      <span class="dot"></span>
+      <span>Private beta · Limited access</span>
+    </div>
+    <h1 class="hero-headline fade-up d-1">
+      Nepali Speech,<br>Written <span class="accent">Instantly</span>.
+    </h1>
+    <p class="hero-sub fade-up d-2">
+      The first dedicated Nepali ASR API. Send audio, receive Devanagari text. Built for developers and businesses across Nepal.
+    </p>
+    <div class="hero-ctas fade-up d-3">
+      <a href="#demo" class="btn btn-primary btn-large">Try the Live Demo</a>
+      <a href="#how" class="btn btn-ghost">How it works &rarr;</a>
+    </div>
+    <div class="code-card glass fade-up d-5">
+      <div><span class="prompt">$</span> curl -X POST api.paryaya.ai/v1/transcribe \</div>
+      <span class="indent"><span class="flag">-H</span> "Authorization: Bearer sk-paryaya-xxxx" \</span>
+      <span class="indent"><span class="flag">-F</span> "file=@audio.wav"</span>
+      <div style="height:12px"></div>
+      <div><span class="arrow">&rarr;</span>  "transcript": <span class="nepali">"नमस्ते, मेरो नाम राम हो।"</span></div>
+      <span class="indent">"confidence": <span class="num">0.94</span>,</span>
+      <span class="indent">"processing_ms": <span class="num">210</span></span>
+    </div>
+  </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section class="how" id="how">
+  <div class="container">
+    <div class="how-head animate-on-scroll">
+      <p class="section-eyebrow" style="margin-bottom:16px">For developers</p>
+      <h2 class="section-head">Three steps. That's it.</h2>
+      <p class="section-sub" style="margin-top:14px;max-width:560px;margin-left:auto;margin-right:auto">Your users never touch a Paryaya interface — your app talks to our API. That's the whole model.</p>
+    </div>
+    <div class="how-grid">
+      <div class="step-card glass animate-on-scroll">
+        <div class="num">01</div>
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>
+        </svg>
+        <h3>Get Your API Key</h3>
+        <p>Sign up and receive your <code style="font-family:monospace;font-size:13px;background:rgba(212,43,43,0.08);color:var(--red);padding:1px 6px;border-radius:4px">sk-paryaya-xxxx</code> key instantly. One key is all you need.</p>
+      </div>
+      <div class="step-card glass animate-on-scroll">
+        <div class="num">02</div>
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
+        </svg>
+        <h3>Call the API from Your App</h3>
+        <p>Make a simple HTTP request — send audio bytes or a file. Works from any language. Real-time streaming via WebSocket, or batch via REST.</p>
+      </div>
+      <div class="step-card glass animate-on-scroll">
+        <div class="num">03</div>
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+          <polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="14" y2="17"/>
+        </svg>
+        <h3>Get Nepali Text Back</h3>
+        <p>Your app receives Devanagari transcript in milliseconds. Drop it into your call center software, banking app, or hospital system.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- USE CASES -->
+<section class="usecases" id="usecases">
+  <div class="container">
+    <div class="uc-layout">
+      <div class="uc-left animate-on-scroll">
+        <p class="section-eyebrow">Use Cases</p>
+        <h2 class="section-head">Built for every Nepali business.</h2>
+        <p>From call centers to hospitals, any business that deals with spoken Nepali can now automate transcription — with accuracy that finally matches the language.</p>
+        <div class="accent-line"></div>
+      </div>
+      <div class="uc-grid">
+        <div class="uc-card glass animate-on-scroll">
+          <svg class="uc-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
+          </svg>
+          <h4>Call Centers</h4>
+          <p>Automatically transcribe thousands of customer calls. Find complaints and keywords in minutes, not weeks.</p>
+        </div>
+        <div class="uc-card glass animate-on-scroll">
+          <svg class="uc-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 21h18M3 10h18M5 6l7-3 7 3M4 10v11M20 10v11M8 14v3M12 14v3M16 14v3"/>
+          </svg>
+          <h4>Banking</h4>
+          <p>Voice-enable your Nepali banking apps. Let customers speak instead of type — securely and accurately.</p>
+        </div>
+        <div class="uc-card glass animate-on-scroll">
+          <svg class="uc-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+          </svg>
+          <h4>Healthcare</h4>
+          <p>Doctors dictate notes in Nepali. Paryaya types instantly. Zero manual documentation, full compliance.</p>
+        </div>
+        <div class="uc-card glass animate-on-scroll">
+          <svg class="uc-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 21h18M5 21V10M19 21V10M9 21v-6M15 21v-6M2 10h20L12 3z"/>
+          </svg>
+          <h4>Government</h4>
+          <p>Record meetings, hearings, and official proceedings. Instant Nepali written records, archivable forever.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- DEMO — live API -->
+<section class="demo" id="demo">
+  <div class="container">
+    <div class="demo-head animate-on-scroll">
+      <p class="section-eyebrow" style="margin-bottom:16px">Live transcription</p>
+      <h2 class="section-head">Speak. Watch it appear.</h2>
+      <p class="section-sub">Tap the orb. Speak Nepali. See Devanagari written in real time.</p>
+    </div>
+    <div class="demo-card glass animate-on-scroll">
+      <div class="demo-grid">
+
+        <!-- LEFT: Orb -->
+        <div>
+          <div class="demo-label">Microphone</div>
+          <div class="orb-stage" id="orbStage">
+            <div class="orb-wrap" id="orbWrap" role="button" tabindex="0" aria-label="Start listening">
+              <div class="orb-halo"></div>
+              <svg class="orb-svg" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                  <filter id="liquid" x="-20%" y="-20%" width="140%" height="140%">
+                    <feTurbulence type="fractalNoise" baseFrequency="0.012" numOctaves="2" seed="4" result="noise">
+                      <animate attributeName="baseFrequency" dur="22s" values="0.010;0.020;0.014;0.010" repeatCount="indefinite"/>
+                    </feTurbulence>
+                    <feDisplacementMap in="SourceGraphic" in2="noise" scale="22" xChannelSelector="R" yChannelSelector="G"/>
+                    <feGaussianBlur stdDeviation="1.2"/>
+                  </filter>
+                  <radialGradient id="orbBase" cx="38%" cy="30%" r="75%">
+                    <stop offset="0%"   stop-color="#ffffff"/>
+                    <stop offset="35%"  stop-color="#fff2f2"/>
+                    <stop offset="70%"  stop-color="#ffb8b8"/>
+                    <stop offset="92%"  stop-color="#e84545"/>
+                    <stop offset="100%" stop-color="#c41f1f"/>
+                  </radialGradient>
+                  <radialGradient id="rimGlow" cx="50%" cy="100%" r="60%">
+                    <stop offset="0%"   stop-color="#D42B2B" stop-opacity="0.55"/>
+                    <stop offset="100%" stop-color="#D42B2B" stop-opacity="0"/>
+                  </radialGradient>
+                  <radialGradient id="orbHL" cx="50%" cy="50%" r="50%">
+                    <stop offset="0%"   stop-color="#ffffff" stop-opacity="0.95"/>
+                    <stop offset="60%"  stop-color="#ffffff" stop-opacity="0.25"/>
+                    <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+                  </radialGradient>
+                  <clipPath id="orbClip"><circle cx="100" cy="100" r="94"/></clipPath>
+                </defs>
+
+                <circle cx="100" cy="100" r="94" fill="url(#orbBase)"/>
+                <g clip-path="url(#orbClip)" filter="url(#liquid)">
+                  <circle class="blob-1" cx="60"  cy="75"  r="55" fill="#ffffff" opacity="0.92"/>
+                  <circle class="blob-2" cx="135" cy="125" r="60" fill="#D42B2B" opacity="0.55"/>
+                  <circle class="blob-3" cx="80"  cy="145" r="42" fill="#ff7a7a" opacity="0.7"/>
+                  <circle class="blob-4" cx="140" cy="60"  r="38" fill="#ffffff" opacity="0.75"/>
+                  <circle class="blob-5" cx="100" cy="100" r="30" fill="#ffd2d2" opacity="0.6"/>
+                </g>
+                <circle cx="100" cy="100" r="94" fill="url(#rimGlow)"/>
+                <circle cx="100" cy="100" r="94" fill="none" stroke="rgba(212,43,43,0.18)" stroke-width="2"/>
+                <ellipse cx="72" cy="58" rx="30" ry="18" fill="url(#orbHL)" transform="rotate(-22 72 58)"/>
+                <ellipse cx="132" cy="42" rx="9" ry="4.5" fill="#ffffff" opacity="0.85"/>
+              </svg>
+              <div class="orb-mic">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                  <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                  <line x1="12" y1="19" x2="12" y2="23"/>
+                  <line x1="8" y1="23" x2="16" y2="23"/>
+                </svg>
+              </div>
+            </div>
+            <div class="orb-status" id="orbStatus">Tap to start listening</div>
+            <div class="orb-error" id="orbError"></div>
+            <div class="waveform" id="waveform">
+              <div class="bar"></div><div class="bar"></div><div class="bar"></div>
+              <div class="bar"></div><div class="bar"></div><div class="bar"></div>
+              <div class="bar"></div><div class="bar"></div><div class="bar"></div>
+              <div class="bar"></div><div class="bar"></div><div class="bar"></div>
+              <div class="bar"></div><div class="bar"></div><div class="bar"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- RIGHT: Response -->
+        <div>
+          <div class="demo-label">Live transcript</div>
+          <div class="response-block" id="responseBlock">
+            <div class="placeholder">// Your words will stream here as you speak…</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- STATS -->
+<section class="stats" id="stats">
+  <div class="stats-grid">
+    <div class="stat animate-on-scroll">
+      <div class="stat-value" id="stat-0">&lt; 500ms</div>
+      <div class="stat-label">Average latency</div>
+    </div>
+    <div class="stat animate-on-scroll">
+      <div class="stat-value" id="stat-1">&lt; 15%</div>
+      <div class="stat-label">Word error rate</div>
+    </div>
+    <div class="stat animate-on-scroll">
+      <div class="stat-value" id="stat-2">500+hrs</div>
+      <div class="stat-label">Training data</div>
+    </div>
+    <div class="stat animate-on-scroll">
+      <div class="stat-value" id="stat-3">99.5%</div>
+      <div class="stat-label">Uptime SLA</div>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-grid">
+    <div class="footer-brand">
+      <div class="logo"><span class="pa">प</span><span class="rest">aryaya</span></div>
+      <div class="deva">पर्याय</div>
+      <p>Many voices, one understanding. Built for every speaker of Nepali, everywhere.</p>
+    </div>
+    <div class="footer-col">
+      <h5>Product</h5>
+      <a href="#">Features</a>
+      <a href="#">Documentation</a>
+      <a href="#">Changelog</a>
+      <a href="#">Roadmap</a>
+    </div>
+    <div class="footer-col">
+      <h5>Company</h5>
+      <a href="#">About</a>
+      <a href="#">Blog</a>
+      <a href="#">Careers</a>
+      <a href="#">Contact</a>
+    </div>
+    <div class="footer-col">
+      <h5>Developers</h5>
+      <a href="#">API Reference</a>
+      <a href="#">SDKs</a>
+      <a href="#">Status</a>
+      <a href="#">GitHub</a>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <div>© 2026 Paryaya. Built in Nepal 🇳🇵</div>
+    <div>contact@paryaya.ai</div>
+  </div>
+</footer>
+
+<script>
+// ── Navbar scroll ──
+const navbar = document.getElementById('navbar');
+window.addEventListener('scroll', () => {
+  navbar.classList.toggle('scrolled', window.scrollY > 12);
+});
+
+// ── Scroll animations ──
+const scrollObs = new IntersectionObserver(entries => {
+  entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
+}, { threshold: 0.15 });
+document.querySelectorAll('.animate-on-scroll').forEach(el => scrollObs.observe(el));
+
+// ── Three.js hero background ──
+(function() {
+  if (window.innerWidth < 768 || !window.THREE) return;
+  const canvas = document.getElementById('hero-canvas');
+  const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
+  const scene = new THREE.Scene();
+  const hero = document.querySelector('.hero');
+  let w = hero.clientWidth, h = hero.clientHeight;
+  const camera = new THREE.PerspectiveCamera(75, w/h, 0.1, 1000);
+  camera.position.z = 8;
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  renderer.setSize(w, h);
+
+  const ico = new THREE.Mesh(
+    new THREE.IcosahedronGeometry(3, 1),
+    new THREE.MeshBasicMaterial({ color: 0xD42B2B, wireframe: true, opacity: 0.07, transparent: true })
+  );
+  scene.add(ico);
+
+  const ico2 = new THREE.Mesh(
+    new THREE.IcosahedronGeometry(1.6, 0),
+    new THREE.MeshBasicMaterial({ color: 0xD42B2B, wireframe: true, opacity: 0.10, transparent: true })
+  );
+  ico2.position.set(3.6, -1.4, -1);
+  scene.add(ico2);
+
+  const spheres = [];
+  for (let i = 0; i < 6; i++) {
+    const r = 0.15 + Math.random() * 0.25;
+    const s = new THREE.Mesh(
+      new THREE.SphereGeometry(r, 24, 24),
+      new THREE.MeshBasicMaterial({ color: 0xD42B2B, opacity: 0.08 + Math.random() * 0.05, transparent: true })
+    );
+    s.position.set((Math.random()-.5)*10, (Math.random()-.5)*6, (Math.random()-.5)*4);
+    s.userData = { baseY: s.position.y, phase: Math.random() * Math.PI * 2 };
+    spheres.push(s); scene.add(s);
+  }
+
+  window.addEventListener('resize', () => {
+    w = hero.clientWidth; h = hero.clientHeight;
+    camera.aspect = w/h; camera.updateProjectionMatrix();
+    renderer.setSize(w, h);
+  });
+
+  let t = 0;
+  (function animate() {
+    t += 0.01;
+    ico.rotation.x += 0.001; ico.rotation.y += 0.001;
+    ico2.rotation.x -= 0.0015; ico2.rotation.y += 0.002;
+    spheres.forEach(s => {
+      s.rotation.y += 0.002;
+      s.position.y = s.userData.baseY + Math.sin(t + s.userData.phase) * 0.3;
+    });
+    renderer.render(scene, camera);
+    requestAnimationFrame(animate);
+  })();
+})();
+
+// ── LIVE DEMO — real WebSocket VAD ──
+const orbWrap     = document.getElementById('orbWrap');
+const orbStatus   = document.getElementById('orbStatus');
+const orbStage    = document.getElementById('orbStage');
+const orbError    = document.getElementById('orbError');
+const responseBlock = document.getElementById('responseBlock');
+const waveformBars  = document.querySelectorAll('#waveform .bar');
+
+const WS_URL = location.hostname === 'localhost' || location.hostname === '127.0.0.1'
+  ? 'ws://localhost:8000/v1/stream?task=translate'
+  : `wss://${location.hostname}/v1/stream?task=translate`;
+const VAD_THRESH = 0.017;
+const SILENCE_MS = 900;
+const MIN_SPEECH = 280;
+
+let curState = 'idle';
+let vadRunning = false, audioCtx, analyser, dataArray, processor, sourceNode, mediaStream;
+let ws = null, wsStreaming = false;
+let silenceTimer = null, speechStart = null, preBuf = [];
+
+function setOrbState(s) {
+  curState = s;
+  orbWrap.classList.toggle('listening', s !== 'idle');
+  orbStage.classList.toggle('active', s !== 'idle');
+  const labels = { idle: 'Tap to start listening', listening: '…', speaking: '…', translating: 'Translating…' };
+  if (s === 'listening' || s === 'speaking') {
+    orbStatus.innerHTML = '<span class="live-dot"></span>' + (s === 'speaking' ? 'Hearing you…' : 'Listening…');
+  } else {
+    orbStatus.textContent = labels[s] || s;
+  }
+  if (s !== 'idle') waveformBars.forEach(b => { b.style.height = '6px'; });
+}
+
+function showError(msg) {
+  orbError.textContent = msg;
+  setTimeout(() => { orbError.textContent = ''; }, 4000);
+}
+
+function getVol() {
+  analyser.getByteTimeDomainData(dataArray);
+  let sum = 0;
+  for (let i = 0; i < dataArray.length; i++) { const v = (dataArray[i]-128)/128; sum += v*v; }
+  return Math.sqrt(sum / dataArray.length);
+}
+
+function driveWaveform(vol) {
+  waveformBars.forEach(b => {
+    const h = 6 + Math.random() * Math.max(8, vol * 180);
+    b.style.height = h + 'px';
+    b.style.transition = 'height 0.12s ease';
+  });
+}
+
+function vadLoop() {
+  if (!vadRunning) return;
+  requestAnimationFrame(vadLoop);
+  const vol = getVol();
+  if (curState !== 'idle') driveWaveform(vol);
+  if (curState === 'translating') return;
+
+  if (vol > VAD_THRESH) {
+    if (curState === 'listening') { speechStart = Date.now(); setOrbState('speaking'); openWS(); }
+    clearTimeout(silenceTimer); silenceTimer = null;
+  } else if (curState === 'speaking') {
+    if (!silenceTimer) {
+      silenceTimer = setTimeout(() => {
+        silenceTimer = null;
+        if (Date.now() - speechStart > MIN_SPEECH) { setOrbState('translating'); sendStop(); }
+        else { setOrbState('listening'); closeWS(); }
+      }, SILENCE_MS);
+    }
+  }
+}
+
+async function startMic() {
+  try {
+    mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    audioCtx    = new AudioContext({ sampleRate: 16000 });
+    sourceNode  = audioCtx.createMediaStreamSource(mediaStream);
+    analyser    = audioCtx.createAnalyser(); analyser.fftSize = 1024;
+    dataArray   = new Uint8Array(analyser.fftSize);
+    sourceNode.connect(analyser);
+
+    preBuf    = [];
+    processor = audioCtx.createScriptProcessor(4096, 1, 1);
+    processor.onaudioprocess = e => {
+      const f32 = e.inputBuffer.getChannelData(0);
+      const i16 = new Int16Array(f32.length);
+      for (let i = 0; i < f32.length; i++) i16[i] = Math.max(-32768, Math.min(32767, f32[i]*32768));
+      if (wsStreaming && ws && ws.readyState === WebSocket.OPEN) {
+        while (preBuf.length) ws.send(preBuf.shift());
+        ws.send(i16.buffer);
+      } else if (curState === 'speaking') {
+        preBuf.push(i16.buffer.slice());
+        if (preBuf.length > 10) preBuf.shift();
+      }
+    };
+    sourceNode.connect(processor);
+    processor.connect(audioCtx.destination);
+
+    setOrbState('listening');
+    vadRunning = true;
+    vadLoop();
+  } catch {
+    showError('Mic access denied — check browser permissions');
+    setOrbState('idle');
+  }
+}
+
+function stopAll() {
+  vadRunning = false;
+  clearTimeout(silenceTimer); silenceTimer = null;
+  wsStreaming = false; preBuf = [];
+  if (ws)         { ws.onclose = null; ws.close(); ws = null; }
+  if (processor)  { processor.disconnect(); processor = null; }
+  if (sourceNode) { sourceNode.disconnect(); sourceNode = null; }
+  if (audioCtx)   { audioCtx.close(); audioCtx = null; }
+  if (mediaStream){ mediaStream.getTracks().forEach(t => t.stop()); mediaStream = null; }
+  setOrbState('idle');
+  waveformBars.forEach(b => { b.style.height = '6px'; });
+}
+
+async function openWS() {
+  ws = new WebSocket(WS_URL);
+  ws.binaryType = 'arraybuffer';
+  ws.onclose = () => {
+    if (curState === 'translating' || curState === 'speaking') {
+      ws = null; wsStreaming = false;
+      if (!responseBlock.querySelector('[data-final]')) showError('No speech detected — try again');
+      setOrbState('listening');
+    }
+    ws = null;
+  };
+  try {
+    await new Promise((res, rej) => { ws.onopen = res; ws.onerror = rej; });
+    ws.send(JSON.stringify({ type: 'start', sample_rate: 16000 }));
+    ws.onmessage = onMsg;
+    wsStreaming = true;
+  } catch {
+    showError('Cannot connect to API — is it running on port 8000?');
+    setOrbState('listening'); ws = null;
+  }
+}
+
+function sendStop() {
+  wsStreaming = false;
+  if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'stop' }));
+  else { setOrbState('listening'); ws = null; }
+}
+
+function closeWS() { wsStreaming = false; if (ws) { ws.close(); ws = null; } }
+
+function showPartial(text) {
+  responseBlock.innerHTML = `
+    <div style="display:flex;gap:14px;align-items:center;margin-bottom:14px;font-size:11px;letter-spacing:1.4px;text-transform:uppercase;">
+      <span style="color:#FF6B6B;"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#FF6B6B;margin-right:6px;vertical-align:middle;animation:pulse 1.4s ease-out infinite"></span>Streaming</span>
+      <span style="color:#9A9A9A">ne-NP</span>
+    </div>
+    <div style="font-family:'Noto Sans Devanagari',monospace;font-size:15px;line-height:1.9;color:#E8E8E8">${text}<span class="caret"></span></div>`;
+}
+
+function showFinal(text, durSec) {
+  if (!text) {
+    responseBlock.innerHTML = '<div class="placeholder">// No speech detected — speak closer to the mic.</div>';
+    return;
+  }
+  const words = text.trim().split(/\s+/).filter(Boolean).length;
+  responseBlock.innerHTML = `
+    <div style="display:flex;gap:14px;align-items:center;margin-bottom:14px;font-size:11px;letter-spacing:1.4px;text-transform:uppercase;">
+      <span style="color:#98C379">✓ Final</span>
+      <span style="color:#9A9A9A">ne-NP</span>
+      <span style="color:#9A9A9A">${durSec}s audio</span>
+    </div>
+    <div data-final style="font-family:'Noto Sans Devanagari',monospace;font-size:15px;line-height:1.9;color:#FFFFFF;margin-bottom:14px">${text}</div>
+    <div style="font-size:12px;color:#6A6A6A;padding-top:12px;border-top:1px solid rgba(255,255,255,0.08)">
+      words <span style="color:#E5C07B">${words}</span>
+    </div>`;
+}
+
+function onMsg(e) {
+  const m = JSON.parse(e.data);
+  if (m.type === 'partial' && m.transcript) {
+    showPartial(m.transcript);
+  } else if (m.type === 'final') {
+    showFinal(m.transcript, m.duration_sec);
+    if (ws) { ws.onclose = null; ws.close(); ws = null; }
+    setOrbState('listening');
+  }
+}
+
+orbWrap.addEventListener('click', () => { if (curState === 'idle') startMic(); else stopAll(); });
+orbWrap.addEventListener('keydown', e => {
+  if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); if (curState === 'idle') startMic(); else stopAll(); }
+});
+</script>
+</body>
+</html>

@@ -14,18 +14,20 @@ from __future__ import annotations
 import json
 
 import numpy as np
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 
 from paryaya.api.state import MODULE_STATE
 
 router = APIRouter(tags=["streaming"])
 
-_CHUNK_BATCH = 5     # emit partial every N binary chunks
-_INT16_MAX   = 32768.0
+_CHUNK_BATCH  = 5       # emit partial every N binary chunks (~1.3 s at 16 kHz / 4096 samples)
+_INT16_MAX    = 32768.0
+_SILENCE_RMS  = 0.01    # skip transcription if audio is below this energy level
+_MIN_DURATION = 1.5     # skip transcription if audio is shorter than this (seconds)
 
 
 @router.websocket("/v1/stream")
-async def stream(ws: WebSocket) -> None:
+async def stream(ws: WebSocket, task: str = Query("transcribe")) -> None:
     await ws.accept()
 
     backend = MODULE_STATE.get("backend", "whisper")
@@ -54,12 +56,14 @@ async def stream(ws: WebSocket) -> None:
                 elif ctrl.get("type") == "stop":
                     if pcm_buffer:
                         audio  = _concat(pcm_buffer)
-                        result = _transcribe(audio, sample_rate, backend, model)
-                        await ws.send_text(json.dumps({
-                            "type":        "final",
-                            "transcript":  result["transcript"],
-                            "duration_sec": result["duration_sec"],
-                        }))
+                        result = _transcribe(audio, sample_rate, backend, model, task)
+                    else:
+                        result = {"transcript": "", "duration_sec": 0.0}
+                    await ws.send_text(json.dumps({
+                        "type":        "final",
+                        "transcript":  result["transcript"],
+                        "duration_sec": result["duration_sec"],
+                    }))
                     break
 
             # ── binary audio chunk ────────────────────────────────────────────
@@ -72,12 +76,14 @@ async def stream(ws: WebSocket) -> None:
                 chunk_count += 1
 
                 if chunk_count % _CHUNK_BATCH == 0:
-                    audio  = _concat(pcm_buffer)
-                    result = _transcribe(audio, sample_rate, backend, model)
-                    await ws.send_text(json.dumps({
-                        "type":       "partial",
-                        "transcript": result["transcript"],
-                    }))
+                    audio = _concat(pcm_buffer)
+                    if _is_speech(audio, sample_rate):
+                        result = _transcribe(audio, sample_rate, backend, model, task)
+                        if result["transcript"]:
+                            await ws.send_text(json.dumps({
+                                "type":       "partial",
+                                "transcript": result["transcript"],
+                            }))
 
     except WebSocketDisconnect:
         pass
@@ -87,8 +93,16 @@ def _concat(chunks: list[np.ndarray]) -> np.ndarray:
     return np.concatenate(chunks).astype(np.float32)
 
 
-def _transcribe(audio: np.ndarray, sample_rate: int, backend: str, model) -> dict:
+def _is_speech(audio: np.ndarray, sample_rate: int) -> bool:
+    if len(audio) / sample_rate < _MIN_DURATION:
+        return False
+    return float(np.sqrt(np.mean(audio ** 2))) >= _SILENCE_RMS
+
+
+def _transcribe(audio: np.ndarray, sample_rate: int, backend: str, model, task: str = "transcribe") -> dict:
     if backend == "whisper":
+        if task == "translate":
+            return model.translate(audio, sample_rate=sample_rate)
         return model.transcribe(audio, sample_rate=sample_rate)
     from paryaya.inference.transcribe import transcribe_audio_array
     tok    = MODULE_STATE.get("tokenizer")
