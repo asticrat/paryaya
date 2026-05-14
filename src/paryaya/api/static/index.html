@@ -184,27 +184,27 @@
     filter: blur(14px); opacity: 0.55;
     transition: opacity 0.4s ease, transform 0.4s ease; pointer-events: none;
   }
-  .orb-wrap.listening .orb-halo { opacity: 1; animation: haloPulse 1.6s ease-in-out infinite; }
+  .orb-wrap.speaking .orb-halo { opacity: 1; animation: haloPulse 1.6s ease-in-out infinite; }
   @keyframes haloPulse { 0%,100%{transform:scale(1);opacity:0.7} 50%{transform:scale(1.18);opacity:1} }
   .orb-svg {
     width: 180px; height: 180px; border-radius: 50%;
     filter: drop-shadow(0 18px 36px rgba(212,43,43,0.30)) drop-shadow(0 4px 12px rgba(0,0,0,0.10));
-    transition: transform 0.5s cubic-bezier(0.2,0.8,0.2,1);
-    animation: orbBreathe 5s ease-in-out infinite; overflow: visible;
+    overflow: visible;
+    animation: orbBreathe 5s ease-in-out infinite;
   }
-  .orb-wrap.listening .orb-svg { animation: orbBreatheFast 1.4s ease-in-out infinite; }
-  @keyframes orbBreathe { 0%,100%{transform:scale(1)} 50%{transform:scale(1.025)} }
+  .orb-wrap.speaking .orb-svg { animation: orbBreatheFast 1.4s ease-in-out infinite; }
+  @keyframes orbBreathe { 0%,100%{transform:scale(1)} 50%{transform:scale(1.018)} }
   @keyframes orbBreatheFast { 0%,100%{transform:scale(1.03)} 50%{transform:scale(1.10)} }
-  .blob-1 { animation: blobA 8s ease-in-out infinite; transform-origin: center; }
-  .blob-2 { animation: blobB 11s ease-in-out infinite; transform-origin: center; }
-  .blob-3 { animation: blobC 9.5s ease-in-out infinite; transform-origin: center; }
-  .blob-4 { animation: blobD 13s ease-in-out infinite; transform-origin: center; }
-  .blob-5 { animation: blobE 10.5s ease-in-out infinite; transform-origin: center; }
-  .orb-wrap.listening .blob-1 { animation-duration: 2.6s; }
-  .orb-wrap.listening .blob-2 { animation-duration: 3.2s; }
-  .orb-wrap.listening .blob-3 { animation-duration: 2.4s; }
-  .orb-wrap.listening .blob-4 { animation-duration: 3.8s; }
-  .orb-wrap.listening .blob-5 { animation-duration: 3.0s; }
+  .blob-1 { animation: blobA 8s ease-in-out infinite; transform-origin: center; animation-play-state: paused; }
+  .blob-2 { animation: blobB 11s ease-in-out infinite; transform-origin: center; animation-play-state: paused; }
+  .blob-3 { animation: blobC 9.5s ease-in-out infinite; transform-origin: center; animation-play-state: paused; }
+  .blob-4 { animation: blobD 13s ease-in-out infinite; transform-origin: center; animation-play-state: paused; }
+  .blob-5 { animation: blobE 10.5s ease-in-out infinite; transform-origin: center; animation-play-state: paused; }
+  .orb-wrap.speaking .blob-1 { animation-play-state: running; animation-duration: 2.6s; }
+  .orb-wrap.speaking .blob-2 { animation-play-state: running; animation-duration: 3.2s; }
+  .orb-wrap.speaking .blob-3 { animation-play-state: running; animation-duration: 2.4s; }
+  .orb-wrap.speaking .blob-4 { animation-play-state: running; animation-duration: 3.8s; }
+  .orb-wrap.speaking .blob-5 { animation-play-state: running; animation-duration: 3.0s; }
   @keyframes blobA { 0%,100%{transform:translate(0,0) scale(1)} 33%{transform:translate(20px,18px) scale(1.1)} 66%{transform:translate(-12px,24px) scale(0.95)} }
   @keyframes blobB { 0%,100%{transform:translate(0,0) scale(1)} 50%{transform:translate(-22px,-18px) scale(1.15)} }
   @keyframes blobC { 0%,100%{transform:translate(0,0) scale(1) rotate(0deg)} 50%{transform:translate(18px,-14px) scale(1.08) rotate(20deg)} }
@@ -215,7 +215,7 @@
     z-index: 3; color: var(--red); opacity: 0.55;
     transition: opacity 0.25s ease, transform 0.25s ease; pointer-events: none;
   }
-  .orb-wrap.listening .orb-mic { opacity: 0; transform: scale(0.6); }
+  .orb-wrap.active .orb-mic { opacity: 0; transform: scale(0.6); }
   .orb-mic svg { width: 30px; height: 30px; filter: drop-shadow(0 1px 2px rgba(0,0,0,0.15)); }
   .orb-status {
     font-family: 'DM Sans', sans-serif; font-size: 14px; color: var(--text-mid);
@@ -650,10 +650,13 @@ function downsample(f32, fromRate, toRate) {
 
 function setOrbState(s) {
   curState = s;
-  orbWrap.classList.toggle('listening', s !== 'idle');
-  orbStage.classList.toggle('active', s !== 'idle');
-  if (s === 'idle' && dispMap) { dispMap.setAttribute('scale', '22'); }
-  if (s === 'translating' && dispMap) { dispMap.setAttribute('scale', '38'); }
+  orbWrap.classList.toggle('active',   s !== 'idle');
+  orbWrap.classList.toggle('speaking', s === 'speaking');
+  orbStage.classList.toggle('active',  s !== 'idle');
+  if (dispMap) {
+    if (s === 'idle' || s === 'listening') dispMap.setAttribute('scale', '22');
+    else if (s === 'translating') dispMap.setAttribute('scale', '36');
+  }
   if (s === 'listening' || s === 'speaking') {
     orbStatus.innerHTML = '<span class="live-dot"></span>' + (s === 'speaking' ? 'Hearing you…' : 'Listening…');
   } else {
@@ -676,14 +679,13 @@ function getVol() {
 }
 
 function driveOrb(vol) {
-  // Waveform bars
+  if (curState !== 'speaking') return;
   waveformBars.forEach(b => {
     const h = 6 + Math.random() * Math.max(8, vol * 200);
     b.style.height = h + 'px';
     b.style.transition = 'height 0.08s ease';
   });
-  // Live liquid displacement driven by voice amplitude
-  if (dispMap && (curState === 'speaking' || curState === 'listening')) {
+  if (dispMap) {
     const scale = 22 + Math.min(vol * 600, 90);
     dispMap.setAttribute('scale', String(scale.toFixed(1)));
   }
@@ -723,10 +725,11 @@ async function startMic() {
     sourceNode.connect(analyser);
 
     preBuf = [];
-    await audioCtx.audioWorklet.addModule('/static/worklet.js');
-    processor = new AudioWorkletNode(audioCtx, 'pcm-processor');
-    processor.port.onmessage = (e) => {
-      const f32  = new Float32Array(e.data);
+    const silentGain = audioCtx.createGain();
+    silentGain.gain.value = 0;
+    silentGain.connect(audioCtx.destination);
+
+    function handleChunk(f32) {
       const down = downsample(f32, nativeSR, TARGET_SR);
       const i16  = new Int16Array(down.length);
       for (let i = 0; i < down.length; i++) i16[i] = Math.max(-32768, Math.min(32767, down[i] * 32768));
@@ -737,12 +740,18 @@ async function startMic() {
         preBuf.push(i16.buffer.slice());
         if (preBuf.length > 12) preBuf.shift();
       }
-    };
+    }
+
+    try {
+      await audioCtx.audioWorklet.addModule('/static/worklet.js');
+      processor = new AudioWorkletNode(audioCtx, 'pcm-processor');
+      processor.port.onmessage = (e) => handleChunk(new Float32Array(e.data));
+    } catch {
+      processor = audioCtx.createScriptProcessor(4096, 1, 1);
+      processor.onaudioprocess = (e) => handleChunk(e.inputBuffer.getChannelData(0));
+    }
     sourceNode.connect(processor);
-    const silentGain = audioCtx.createGain();
-    silentGain.gain.value = 0;
     processor.connect(silentGain);
-    silentGain.connect(audioCtx.destination);
 
     setOrbState('listening');
     vadRunning = true;
