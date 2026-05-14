@@ -624,27 +624,40 @@ const orbStage    = document.getElementById('orbStage');
 const orbError    = document.getElementById('orbError');
 const responseBlock = document.getElementById('responseBlock');
 const waveformBars  = document.querySelectorAll('#waveform .bar');
+const dispMap     = document.querySelector('#liquid feDisplacementMap');
+const turbulence  = document.querySelector('#liquid feTurbulence');
 
 const WS_URL = location.hostname === 'localhost' || location.hostname === '127.0.0.1'
   ? 'ws://localhost:8000/v1/stream?task=translate'
   : `wss://${location.hostname}/v1/stream?task=translate`;
-const VAD_THRESH = 0.017;
-const SILENCE_MS = 900;
-const MIN_SPEECH = 280;
+const VAD_THRESH = 0.015;
+const SILENCE_MS = 1200;
+const MIN_SPEECH = 500;
+const TARGET_SR  = 16000;
 
 let curState = 'idle';
-let vadRunning = false, audioCtx, analyser, dataArray, processor, sourceNode, mediaStream;
+let vadRunning = false, audioCtx, analyser, dataArray, processor, sourceNode, mediaStream, nativeSR;
 let ws = null, wsStreaming = false;
 let silenceTimer = null, speechStart = null, preBuf = [];
+
+function downsample(f32, fromRate, toRate) {
+  if (fromRate === toRate) return f32;
+  const ratio = fromRate / toRate;
+  const out = new Float32Array(Math.floor(f32.length / ratio));
+  for (let i = 0; i < out.length; i++) out[i] = f32[Math.round(i * ratio)];
+  return out;
+}
 
 function setOrbState(s) {
   curState = s;
   orbWrap.classList.toggle('listening', s !== 'idle');
   orbStage.classList.toggle('active', s !== 'idle');
-  const labels = { idle: 'Tap to start listening', listening: '…', speaking: '…', translating: 'Processing… please wait' };
+  if (s === 'idle' && dispMap) { dispMap.setAttribute('scale', '22'); }
+  if (s === 'translating' && dispMap) { dispMap.setAttribute('scale', '38'); }
   if (s === 'listening' || s === 'speaking') {
     orbStatus.innerHTML = '<span class="live-dot"></span>' + (s === 'speaking' ? 'Hearing you…' : 'Listening…');
   } else {
+    const labels = { idle: 'Tap to start listening', translating: 'Processing… please wait' };
     orbStatus.textContent = labels[s] || s;
   }
   if (s !== 'idle') waveformBars.forEach(b => { b.style.height = '6px'; });
@@ -652,7 +665,7 @@ function setOrbState(s) {
 
 function showError(msg) {
   orbError.textContent = msg;
-  setTimeout(() => { orbError.textContent = ''; }, 4000);
+  setTimeout(() => { orbError.textContent = ''; }, 5000);
 }
 
 function getVol() {
@@ -662,19 +675,25 @@ function getVol() {
   return Math.sqrt(sum / dataArray.length);
 }
 
-function driveWaveform(vol) {
+function driveOrb(vol) {
+  // Waveform bars
   waveformBars.forEach(b => {
-    const h = 6 + Math.random() * Math.max(8, vol * 180);
+    const h = 6 + Math.random() * Math.max(8, vol * 200);
     b.style.height = h + 'px';
-    b.style.transition = 'height 0.12s ease';
+    b.style.transition = 'height 0.08s ease';
   });
+  // Live liquid displacement driven by voice amplitude
+  if (dispMap && (curState === 'speaking' || curState === 'listening')) {
+    const scale = 22 + Math.min(vol * 600, 90);
+    dispMap.setAttribute('scale', String(scale.toFixed(1)));
+  }
 }
 
 function vadLoop() {
   if (!vadRunning) return;
   requestAnimationFrame(vadLoop);
   const vol = getVol();
-  if (curState !== 'idle') driveWaveform(vol);
+  if (curState !== 'idle') driveOrb(vol);
   if (curState === 'translating') return;
 
   if (vol > VAD_THRESH) {
@@ -693,25 +712,29 @@ function vadLoop() {
 
 async function startMic() {
   try {
-    mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    audioCtx    = new AudioContext({ sampleRate: 16000 });
-    sourceNode  = audioCtx.createMediaStreamSource(mediaStream);
-    analyser    = audioCtx.createAnalyser(); analyser.fftSize = 1024;
-    dataArray   = new Uint8Array(analyser.fftSize);
+    mediaStream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 }
+    });
+    audioCtx  = new (window.AudioContext || window.webkitAudioContext)();
+    nativeSR  = audioCtx.sampleRate;
+    sourceNode = audioCtx.createMediaStreamSource(mediaStream);
+    analyser   = audioCtx.createAnalyser(); analyser.fftSize = 1024;
+    dataArray  = new Uint8Array(analyser.fftSize);
     sourceNode.connect(analyser);
 
     preBuf    = [];
     processor = audioCtx.createScriptProcessor(4096, 1, 1);
     processor.onaudioprocess = e => {
-      const f32 = e.inputBuffer.getChannelData(0);
-      const i16 = new Int16Array(f32.length);
-      for (let i = 0; i < f32.length; i++) i16[i] = Math.max(-32768, Math.min(32767, f32[i]*32768));
+      const f32  = e.inputBuffer.getChannelData(0);
+      const down = downsample(f32, nativeSR, TARGET_SR);
+      const i16  = new Int16Array(down.length);
+      for (let i = 0; i < down.length; i++) i16[i] = Math.max(-32768, Math.min(32767, down[i] * 32768));
       if (wsStreaming && ws && ws.readyState === WebSocket.OPEN) {
         while (preBuf.length) ws.send(preBuf.shift());
         ws.send(i16.buffer);
       } else if (curState === 'speaking') {
         preBuf.push(i16.buffer.slice());
-        if (preBuf.length > 10) preBuf.shift();
+        if (preBuf.length > 12) preBuf.shift();
       }
     };
     sourceNode.connect(processor);
@@ -723,7 +746,7 @@ async function startMic() {
     setOrbState('listening');
     vadRunning = true;
     vadLoop();
-  } catch {
+  } catch (err) {
     showError('Mic access denied — check browser permissions');
     setOrbState('idle');
   }
