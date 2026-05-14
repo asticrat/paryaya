@@ -247,14 +247,6 @@
   .caret { display: inline-block; width: 8px; height: 14px; background: var(--red); margin-left: 4px; vertical-align: middle; animation: caretBlink 1s steps(2) infinite; }
   @keyframes caretBlink { 50%{opacity:0} }
 
-  /* ── STATS ── */
-  .stats { background: var(--white); padding: 100px 48px; }
-  .stats-grid { display: grid; grid-template-columns: repeat(4,1fr); max-width: 1100px; margin: 0 auto; }
-  .stat { text-align: center; padding: 16px 24px; border-right: 1px solid rgba(0,0,0,0.06); }
-  .stat:last-child { border-right: none; }
-  .stat-value { font-family: 'Cormorant Garamond', serif; font-size: 64px; font-weight: 600; color: var(--red); line-height: 1; letter-spacing: -0.02em; margin-bottom: 12px; }
-  .stat-label { font-size: 14px; color: var(--text-mid); font-weight: 500; }
-
   /* ── FOOTER ── */
   footer { background: #0F0F0F; color: white; padding: 80px 48px 32px; }
   .footer-grid { display: grid; grid-template-columns: 1.4fr 1fr 1fr 1fr; gap: 60px; max-width: 1200px; margin: 0 auto 60px; }
@@ -282,9 +274,6 @@
     .how-grid { grid-template-columns: 1fr; max-width: 520px; margin: 0 auto; }
     .uc-layout { grid-template-columns: 1fr; gap: 40px; }
     .demo-grid { grid-template-columns: 1fr; }
-    .stats-grid { grid-template-columns: 1fr 1fr; }
-    .stat:nth-child(2) { border-right: none; }
-    .stat:nth-child(1), .stat:nth-child(2) { border-bottom: 1px solid rgba(0,0,0,0.06); padding-bottom: 32px; margin-bottom: 32px; }
     .footer-grid { grid-template-columns: 1fr 1fr; gap: 40px; }
   }
   @media (max-width: 768px) {
@@ -294,9 +283,6 @@
     .hero { padding-top: 100px; padding-bottom: 60px; }
     .hero-headline { font-size: 48px; }
     .section-head { font-size: 36px; }
-    .stats-grid { grid-template-columns: 1fr; }
-    .stat { border-right: none; border-bottom: 1px solid rgba(0,0,0,0.06); padding: 24px; }
-    .stat:last-child { border-bottom: none; }
     .footer-grid { grid-template-columns: 1fr; gap: 32px; }
     .footer-bottom { flex-direction: column; gap: 8px; align-items: flex-start; }
     #hero-canvas { display: none; }
@@ -360,7 +346,6 @@
     </div>
     <div class="how-grid">
       <div class="step-card glass animate-on-scroll">
-        <div class="num">01</div>
         <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
           <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>
         </svg>
@@ -368,7 +353,6 @@
         <p>Sign up and receive your <code style="font-family:monospace;font-size:13px;background:rgba(212,43,43,0.08);color:var(--red);padding:1px 6px;border-radius:4px">sk-paryaya-xxxx</code> key instantly. One key is all you need.</p>
       </div>
       <div class="step-card glass animate-on-scroll">
-        <div class="num">02</div>
         <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
           <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
         </svg>
@@ -376,7 +360,6 @@
         <p>Make a simple HTTP request — send audio bytes or a file. Works from any language. Real-time streaming via WebSocket, or batch via REST.</p>
       </div>
       <div class="step-card glass animate-on-scroll">
-        <div class="num">03</div>
         <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
           <polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="14" y2="17"/>
@@ -520,28 +503,6 @@
         </div>
 
       </div>
-    </div>
-  </div>
-</section>
-
-<!-- STATS -->
-<section class="stats" id="stats">
-  <div class="stats-grid">
-    <div class="stat animate-on-scroll">
-      <div class="stat-value" id="stat-0">&lt; 500ms</div>
-      <div class="stat-label">Average latency</div>
-    </div>
-    <div class="stat animate-on-scroll">
-      <div class="stat-value" id="stat-1">&lt; 15%</div>
-      <div class="stat-label">Word error rate</div>
-    </div>
-    <div class="stat animate-on-scroll">
-      <div class="stat-value" id="stat-2">500+hrs</div>
-      <div class="stat-label">Training data</div>
-    </div>
-    <div class="stat animate-on-scroll">
-      <div class="stat-value" id="stat-3">99.5%</div>
-      <div class="stat-label">Uptime SLA</div>
     </div>
   </div>
 </section>
@@ -751,7 +712,10 @@ async function startMic() {
       }
     };
     sourceNode.connect(processor);
-    processor.connect(audioCtx.destination);
+    const silentGain = audioCtx.createGain();
+    silentGain.gain.value = 0;
+    processor.connect(silentGain);
+    silentGain.connect(audioCtx.destination);
 
     setOrbState('listening');
     vadRunning = true;
@@ -787,20 +751,30 @@ async function openWS() {
     ws = null;
   };
   try {
-    await new Promise((res, rej) => { ws.onopen = res; ws.onerror = rej; });
+    await new Promise((res, rej) => {
+      const t = setTimeout(() => rej(new Error('timeout')), 6000);
+      ws.onopen = () => { clearTimeout(t); res(); };
+      ws.onerror = (e) => { clearTimeout(t); rej(e); };
+    });
     ws.send(JSON.stringify({ type: 'start', sample_rate: 16000 }));
     ws.onmessage = onMsg;
     wsStreaming = true;
   } catch {
-    showError('Cannot connect to API — is it running on port 8000?');
-    setOrbState('listening'); ws = null;
+    showError('Cannot reach server — check your connection');
+    if (ws) { ws.onclose = null; ws.close(); ws = null; }
+    setOrbState('listening');
   }
 }
 
 function sendStop() {
   wsStreaming = false;
-  if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'stop' }));
-  else { setOrbState('listening'); ws = null; }
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: 'stop' }));
+    setTimeout(() => { if (curState === 'translating') { setOrbState('listening'); } }, 12000);
+  } else {
+    if (ws) { ws.onclose = null; ws.close(); ws = null; }
+    setOrbState('listening');
+  }
 }
 
 function closeWS() { wsStreaming = false; if (ws) { ws.close(); ws = null; } }
