@@ -116,7 +116,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["Permissions-Policy"]        = "microphone=(self)"
         response.headers["Strict-Transport-Security"] = "max-age=15552000; includeSubDomains"
         response.headers["Content-Security-Policy"]   = _CSP
-        response.headers.pop("Server", None)
+        response.headers["Server"] = ""
         return response
 
 
