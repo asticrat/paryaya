@@ -595,7 +595,7 @@ const SILENCE_MS = 1200;
 const MIN_SPEECH = 500;
 const TARGET_SR  = 16000;
 
-let curState = 'idle';
+let curState = 'idle', micStarting = false;
 let vadRunning = false, audioCtx, analyser, dataArray, processor, sourceNode, mediaStream, nativeSR;
 let ws = null, wsStreaming = false;
 let silenceTimer = null, speechStart = null, preBuf = [];
@@ -705,7 +705,14 @@ async function startMic() {
     vadRunning = true;
     vadLoop();
   } catch (err) {
-    showError('Mic access denied — check browser permissions');
+    console.error('[paryaya] startMic failed:', err.name, err.message);
+    orbWrap.classList.remove('listening');
+    const msg = err.name === 'NotAllowedError'  ? 'Mic permission denied — allow it in browser settings' :
+                err.name === 'NotFoundError'    ? 'No microphone found — plug one in' :
+                err.name === 'NotReadableError' ? 'Mic is in use by another app — close it' :
+                `Mic error: ${err.name}`;
+    responseBlock.querySelector('.tp-body').innerHTML =
+      `<div class="tp-idle" style="color:#D42B2B">${msg}</div>`;
     setOrbState('idle');
   }
 }
@@ -810,18 +817,19 @@ function onMsg(e) {
 }
 
 orbWrap.addEventListener('click', () => {
-  if (curState === 'idle') {
-    setOrbState('listening'); // immediate feedback before async setup
-    startMic();
-  } else if (curState !== 'translating') {
+  if (curState === 'idle' && !micStarting) {
+    micStarting = true;
+    orbWrap.classList.add('listening');
+    orbStatus.textContent = 'Starting…';
+    startMic().finally(() => { micStarting = false; });
+  } else if (!micStarting && curState !== 'translating' && curState !== 'idle') {
     stopAll();
   }
 });
 orbWrap.addEventListener('keydown', e => {
   if (e.key === ' ' || e.key === 'Enter') {
     e.preventDefault();
-    if (curState === 'idle') { setOrbState('listening'); startMic(); }
-    else if (curState !== 'translating') stopAll();
+    orbWrap.click();
   }
 });
 </script>
