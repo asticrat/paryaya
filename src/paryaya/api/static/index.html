@@ -316,7 +316,7 @@
     <a href="#how">Features</a>
     <a href="#usecases">Use Cases</a>
     <a href="#demo">Demo</a>
-    <a href="#">Docs</a>
+    <a href="#demo">Docs</a>
   </div>
   <a href="#demo" class="btn btn-primary">Request Early Access</a>
 </nav>
@@ -485,24 +485,24 @@
     </div>
     <div class="footer-col">
       <h5>Product</h5>
-      <a href="#">Features</a>
-      <a href="#">Documentation</a>
-      <a href="#">Changelog</a>
-      <a href="#">Roadmap</a>
+      <a href="#how">Features</a>
+      <a href="#demo">Documentation</a>
+      <a href="mailto:contact@paryaya.net?subject=Changelog">Changelog</a>
+      <a href="mailto:contact@paryaya.net?subject=Roadmap">Roadmap</a>
     </div>
     <div class="footer-col">
       <h5>Company</h5>
-      <a href="#">About</a>
-      <a href="#">Blog</a>
-      <a href="#">Careers</a>
+      <a href="#how">About</a>
+      <a href="mailto:contact@paryaya.net?subject=Blog">Blog</a>
+      <a href="mailto:contact@paryaya.net?subject=Careers">Careers</a>
       <a href="mailto:contact@paryaya.net">Contact</a>
     </div>
     <div class="footer-col">
       <h5>Developers</h5>
-      <a href="#">API Reference</a>
-      <a href="#">SDKs</a>
-      <a href="#">Status</a>
-      <a href="#">GitHub</a>
+      <a href="#demo">API Reference</a>
+      <a href="mailto:support@paryaya.net?subject=SDKs">SDKs</a>
+      <a href="/health">Status</a>
+      <a href="https://github.com/asti-lab/paryaya" target="_blank" rel="noopener">GitHub</a>
     </div>
   </div>
   <div class="footer-bottom">
@@ -680,8 +680,6 @@ async function startMic() {
     sourceNode = audioCtx.createMediaStreamSource(mediaStream);
     analyser   = audioCtx.createAnalyser(); analyser.fftSize = 1024;
     dataArray  = new Uint8Array(analyser.fftSize);
-    sourceNode.connect(analyser);
-
     preBuf = [];
     const silentGain = audioCtx.createGain();
     silentGain.gain.value = 0;
@@ -708,7 +706,10 @@ async function startMic() {
       processor = audioCtx.createScriptProcessor(4096, 1, 1);
       processor.onaudioprocess = (e) => handleChunk(e.inputBuffer.getChannelData(0));
     }
-    sourceNode.connect(processor);
+    // Chain: sourceNode → analyser → processor → silentGain → destination
+    // Analyser MUST be in the downstream chain or Chrome won't pull audio through it
+    sourceNode.connect(analyser);
+    analyser.connect(processor);
     processor.connect(silentGain);
 
     setOrbState('listening');
