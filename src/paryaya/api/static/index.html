@@ -626,10 +626,10 @@ function setOrbState(s) {
     responseBlock.querySelector('.tp-body').innerHTML =
       '<div class="tp-dots"><span></span><span></span><span></span></div>';
   }
-  if (s === 'listening' || s === 'speaking') {
-    orbStatus.innerHTML = '<span class="live-dot"></span>' + (s === 'speaking' ? 'Hearing you…' : 'Listening…');
+  if (s === 'speaking') {
+    orbStatus.innerHTML = '<span class="live-dot"></span>Recording… tap to translate';
   } else {
-    const labels = { idle: 'Tap to start listening', translating: 'Translating…' };
+    const labels = { idle: 'Tap to start', translating: 'Translating…', listening: 'Tap to start' };
     orbStatus.textContent = labels[s] || s;
   }
 }
@@ -646,27 +646,11 @@ function getVol() {
   return Math.sqrt(sum / dataArray.length);
 }
 
-let _vadTick = 0;
-function vadLoop() {
+// Volume meter only — no VAD, push-to-talk controls recording
+function volLoop() {
   if (!vadRunning) return;
-  requestAnimationFrame(vadLoop);
-  const vol = getVol();
-  volFill.style.width = Math.min(100, vol * 1200) + '%';
-  if (++_vadTick % 60 === 0) console.log('[paryaya] vol:', vol.toFixed(5), 'state:', curState);
-  if (curState === 'translating') return;
-
-  if (vol > VAD_THRESH) {
-    if (curState === 'listening') { speechStart = Date.now(); setOrbState('speaking'); openWS(); }
-    clearTimeout(silenceTimer); silenceTimer = null;
-  } else if (curState === 'speaking') {
-    if (!silenceTimer) {
-      silenceTimer = setTimeout(() => {
-        silenceTimer = null;
-        if (Date.now() - speechStart > MIN_SPEECH) { setOrbState('translating'); sendStop(); }
-        else { setOrbState('listening'); closeWS(); }
-      }, SILENCE_MS);
-    }
-  }
+  requestAnimationFrame(volLoop);
+  volFill.style.width = Math.min(100, getVol() * 1200) + '%';
 }
 
 async function startMic() {
@@ -712,9 +696,10 @@ async function startMic() {
     analyser.connect(processor);
     processor.connect(silentGain);
 
-    setOrbState('listening');
     vadRunning = true;
-    vadLoop();
+    volLoop();
+    setOrbState('speaking');
+    await openWS();
   } catch (err) {
     console.error('[paryaya] startMic failed:', err.name, err.message);
     orbWrap.classList.remove('listening');
@@ -818,7 +803,7 @@ function onMsg(e) {
     } else if (m.type === 'final') {
       showFinal(m.transcript, m.duration_sec);
       if (ws) { ws.onclose = null; ws.close(); ws = null; }
-      setOrbState('listening');
+      stopAll();
     }
   } catch (err) {
     console.error('[paryaya] bad WS message:', e.data, err);
@@ -828,20 +813,19 @@ function onMsg(e) {
 }
 
 orbWrap.addEventListener('click', () => {
-  if (curState === 'idle' && !micStarting) {
+  if ((curState === 'idle' || curState === 'listening') && !micStarting) {
     micStarting = true;
-    orbWrap.classList.add('listening');
+    orbWrap.classList.add('speaking');
     orbStatus.textContent = 'Starting…';
     startMic().finally(() => { micStarting = false; });
-  } else if (!micStarting && curState !== 'translating' && curState !== 'idle') {
-    stopAll();
+  } else if (curState === 'speaking') {
+    setOrbState('translating');
+    sendStop();
   }
+  // ignore clicks while translating
 });
 orbWrap.addEventListener('keydown', e => {
-  if (e.key === ' ' || e.key === 'Enter') {
-    e.preventDefault();
-    orbWrap.click();
-  }
+  if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); orbWrap.click(); }
 });
 </script>
 </body>
